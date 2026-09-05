@@ -1,0 +1,35 @@
+# Project: warden — agentic launch-vetting tool
+# Last updated: 2026-09-05 by initializer session
+
+## What's done
+- Repo scaffolded: deno.json, README, LICENSE (MIT), .gitignore, .env.example
+- feature_list.json written (7 features, all passes=false)
+- src/cli.ts stub (commander CLI shell, no subcommands wired up yet)
+
+## What's in progress
+(none — this was the initializer session, no features implemented on purpose)
+
+## What's next (recommended)
+- On-chain Pons v2 reader [feature_list.json index: 0]
+  Reason: every other feature (repo fingerprint, agent judge, alerts, backtest) depends on having real on-chain data to feed them.
+
+## Notes for the next session
+Runtime is **Deno**, not Node — there is no node/npm on this machine (checked, not installed).
+Dependencies are npm: packages imported via deno.json's "imports" map (npm:viem, npm:commander,
+npm:@anthropic-ai/sdk, npm:node-telegram-bot-api) plus @std/dotenv from JSR. Run `deno task start`,
+not `npm run dev`. `deno.lock` pins exact resolved versions once you run `deno install` or `deno cache`
+against src/cli.ts — do that before writing code that imports a new package for the first time.
+
+Protocol research is running in the background (Pons v2 contract addresses/ABI from the official
+docs.ponsfamily.com + github.com/ponsdotdev/ponsfamily, Robinhood Chain RPC/chain ID, GitHub API
+approach for fork/star timestamps for the authenticity-fingerprint feature). Check for that before
+hand-rolling ABI guesses.
+
+Deliberately did NOT read or reuse code from github.com/Phosphenq/bodkin for this implementation,
+even though that's the repo that inspired this project (see README "Why") — the whole point of
+warden is to be an honest, independently-derived tool, not a copy. Cite it only as prior art in
+prose if relevant, never paste its code. Same standard applies to any other third-party repo:
+dependencies via deno.json imports are fine, wholesale copying is not.
+
+Do NOT commit a real .env — only .env.example, gitignored. Telegram bot token, Anthropic API key,
+RPC URL, and wallet private key (only needed for --live) all get read from .env at runtime.

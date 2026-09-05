@@ -1,0 +1,73 @@
+[
+  {
+    "category": "functional",
+    "description": "warden reads a new Pons v2 launch on-chain in one multicall and extracts risk signals (LP lock, mint/blacklist functions, ownership renounce, holder concentration, dev-buy size)",
+    "steps": [
+      "Point warden at a Pons v2 token address",
+      "Run `warden scan <address>`",
+      "Verify it returns LP-lock status, ownership-renounce status, mint/blacklist flags, top-holder concentration %, and dev-buy size, all read live on-chain"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "warden fingerprints a launch's linked GitHub repo (if any) for authenticity red flags: account-age-vs-activity mismatch, fork/star bursts clustered in a tight time window, self-promoted token ticker in README or author bio",
+    "steps": [
+      "Point warden at a launch that links a GitHub repo",
+      "Run `warden vet-repo <owner>/<repo>`",
+      "Verify it reports account creation date vs first-activity date, fork/star creation timestamps and whether they cluster within an hour, and whether the repo's own README/bio references a token"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "an LLM agent combines the on-chain read and the repo fingerprint into a plain-language verdict with a reasoning log, not just a score",
+    "steps": [
+      "Run `warden judge <address>` on a launch with both on-chain and repo data available",
+      "Verify the output is a written verdict (not just a number) that cites the specific signals it weighed",
+      "Verify a reasoning log is saved alongside the verdict"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "warden pushes each verdict to a Telegram chat in real time as new launches are scanned",
+    "steps": [
+      "Configure a Telegram bot token and chat id",
+      "Run `warden watch` against a live or test feed",
+      "Verify a message with the verdict and key signals arrives in the configured Telegram chat"
+    ],
+    "passes": false
+  },
+  {
+    "category": "functional",
+    "description": "warden defaults to dry-run (alert-only, no trade execution) and requires an explicit --live flag plus a verdict-confidence threshold before it will submit any transaction",
+    "steps": [
+      "Run `warden watch` without --live",
+      "Verify no transaction is ever submitted, only alerts",
+      "Run `warden watch --live --min-confidence 0.8`",
+      "Verify a transaction is only submitted when the agent's verdict confidence clears the threshold, and every auto-trade is logged with the verdict that triggered it"
+    ],
+    "passes": false
+  },
+  {
+    "category": "infra",
+    "description": "warden supports more than one launchpad (Pons v2 first, extensible adapter interface for others)",
+    "steps": [
+      "Add a second launchpad adapter implementing the same interface as the Pons v2 reader",
+      "Run `warden scan` against a launch on the second launchpad",
+      "Verify identical output shape to the Pons v2 path"
+    ],
+    "passes": false
+  },
+  {
+    "category": "data",
+    "description": "warden ships a backtest mode that replays historical launches through the scoring pipeline and reports an honest win-rate, so any claimed accuracy is self-provable rather than a self-reported claim",
+    "steps": [
+      "Run `warden backtest --since <date>`",
+      "Verify it replays real historical launches (not synthetic data) through the same scan+vet+judge pipeline",
+      "Verify it reports how many flagged-risky launches actually rugged and how many flagged-safe launches did not, with sources for each historical outcome"
+    ],
+    "passes": false
+  }
+]
