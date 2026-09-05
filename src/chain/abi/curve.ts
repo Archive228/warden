@@ -1,12 +1,28 @@
 // Curves are deployed per-launch, so there's no fixed address to fetch a
-// verified ABI from ahead of time. These signatures come from reading
-// PonsV2BondingCurve.sol directly (777 lines, fetched in full), not from
-// docs prose. `currentSnipeTaxBps` / `exemptFromSnipeTax` are deliberately
-// NOT included here even though PonsV2LaunchFactory.sol calls them at
-// launch time — a full read of the curve source turned up zero mentions of
-// "snipe" anywhere in it, so that call would fail against the real
-// contract. See README "Known gaps."
+// verified ABI from ahead of time. Most of these signatures come from
+// reading PonsV2BondingCurve.sol directly (777 lines, fetched in full).
+//
+// `currentSnipeTaxBps` is the one entry NOT in that source file — an
+// earlier version of this project trusted that absence and skipped it
+// entirely. An independent audit didn't trust the source repo either way
+// and instead did raw eth_call probes with real selectors against 3 live
+// curves: `currentSnipeTaxBps(address)` resolves cleanly (returns 0 on all
+// 3, cause unconfirmed — could be fully decayed by the time they were
+// checked), and `exemptFromSnipeTax(address)` reverts with a real
+// `NotFactory()` custom error rather than an unknown-selector revert,
+// meaning both functions exist in the deployed bytecode even though
+// they're absent from ponsdotdev/ponsfamily's current HEAD (deployed code
+// newer than the public repo, most likely). Included here on that basis,
+// called defensively (see fetchSnipeTaxBps in pons.ts) since the
+// discrepancy itself is unexplained.
 export const ponsV2CurveAbi = [
+  {
+    inputs: [{ internalType: "address", name: "recipient", type: "address" }],
+    name: "currentSnipeTaxBps",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
   {
     inputs: [],
     name: "getReserves",

@@ -8,4 +8,4 @@ if [ ! -f .env ]; then
 fi
 
 deno install
-echo "warden scaffolded and dependencies resolved. No features are wired up yet — see feature_list.json."
+echo "warden ready. See feature_list.json for what's built vs. planned."

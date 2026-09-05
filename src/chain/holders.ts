@@ -8,30 +8,52 @@ const BROWSER_UA =
 
 export interface HolderConcentration {
   sampledHolders: number;
+  // Top holder's balance divided by the token's real totalSupply — not by
+  // the sum of the fetched page. An earlier version used the page sum as
+  // the denominator, which systematically overstated concentration (an
+  // audit measured ~3 percentage points high on a real token) since it's
+  // missing every balance outside the first page. Blockscout still only
+  // gives us one page of *individual* balances, so `topHolderShare` itself
+  // is exact, but `sampledHolders` under totalSupply's true holder count
+  // whenever there's a next page.
   topHolderShare: number | null;
+  hasMoreHolders: boolean;
 }
 
 export async function fetchHolderConcentration(
   token: Address,
+  totalSupply: bigint,
 ): Promise<HolderConcentration | null> {
-  const res = await fetch(`${BLOCKSCOUT_API}/tokens/${token}/holders`, {
-    headers: { "User-Agent": BROWSER_UA, "Accept": "application/json" },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BLOCKSCOUT_API}/tokens/${token}/holders`, {
+      headers: { "User-Agent": BROWSER_UA, "Accept": "application/json" },
+    });
+  } catch {
+    return null;
+  }
   if (!res.ok) return null;
 
-  const body = await res.json();
-  const items: Array<{ value: string }> = body.items ?? [];
-  if (items.length === 0) return { sampledHolders: 0, topHolderShare: null };
+  let body: { items?: Array<{ value: string }>; next_page_params?: unknown };
+  try {
+    body = await res.json();
+  } catch {
+    return null;
+  }
 
-  const balances = items.map((i) => BigInt(i.value));
-  const total = balances.reduce((a, b) => a + b, 0n);
-  const top = balances[0];
-  const topHolderShare = total > 0n
-    ? Number((top * 10000n) / total) / 10000
+  const items = body.items ?? [];
+  if (items.length === 0) {
+    return { sampledHolders: 0, topHolderShare: null, hasMoreHolders: false };
+  }
+
+  const top = BigInt(items[0].value);
+  const topHolderShare = totalSupply > 0n
+    ? Number((top * 10000n) / totalSupply) / 10000
     : null;
 
-  // Blockscout paginates holders; this is a share of the *fetched page*,
-  // not necessarily the true top holder across all holders. Good enough as
-  // a first-pass signal, not a verified exact figure — see README.
-  return { sampledHolders: items.length, topHolderShare };
+  return {
+    sampledHolders: items.length,
+    topHolderShare,
+    hasMoreHolders: body.next_page_params != null,
+  };
 }

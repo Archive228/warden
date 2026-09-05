@@ -23,33 +23,40 @@ program
       Deno.exit(1);
     }
 
-    const client = createRobinhoodClient();
-    const scan = await scanLaunch(client, token);
+    try {
+      const client = createRobinhoodClient(Deno.env.get("RPC_URL"));
+      const scan = await scanLaunch(client, token);
 
-    if (!scan.exists) {
+      if (!scan.exists) {
+        console.log(
+          JSON.stringify(
+            {
+              token,
+              exists: false,
+              note: "not a Pons v2 launch on this factory",
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+
+      const holders = await fetchHolderConcentration(token, scan.totalSupply);
+
       console.log(
         JSON.stringify(
-          {
-            token,
-            exists: false,
-            note: "not a Pons v2 launch on this factory",
-          },
-          null,
+          { ...scan, holders },
+          (_key, value) => typeof value === "bigint" ? value.toString() : value,
           2,
         ),
       );
-      return;
+    } catch (err) {
+      console.error(
+        `scan failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      Deno.exit(1);
     }
-
-    const holders = await fetchHolderConcentration(token);
-
-    console.log(
-      JSON.stringify(
-        { ...scan, holders },
-        (_key, value) => typeof value === "bigint" ? value.toString() : value,
-        2,
-      ),
-    );
   });
 
 program.parse(Deno.args, { from: "user" });

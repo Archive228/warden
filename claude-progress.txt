@@ -1,90 +1,149 @@
 # Project: warden — agentic launch-vetting tool
-# Last updated: 2026-09-05 by session 2 (first feature)
+# Last updated: 2026-09-05 by session 3 (independent audit + fixes)
 
 ## What's done
-- On-chain Pons v2 reader [feature_list.json index: 0] — passes:true, verified end-to-end
-  against real chain state, not just unit tests. `warden scan <token>` reads: curve
-  progress toward graduation, LP-lock status, fee/tax bps, holder concentration
-  (Blockscout, paginated — see "Known gaps"), dev-buy count/size (via CurveBuy event
-  logs filtered by deployer address), and fixed token-template facts (no mint function,
-  no blacklist function, deployer has zero on-chain privileges — confirmed once from
-  reading PonsV2LauncherToken.sol, true for every Pons v2 launch, not a per-call read).
-  Live-tested against a real launch found on-chain today: token 0xc65AF5ed7d40A2A0
-  C8E362B93b4AF70A40a58456 ("Tales" / TALES), curve 0xeE79eF295daC0d0E8c979fDEd8615
-  F1c3290FdD5, discovered via Blockscout's decoded-logs API on the factory contract.
-  3 automated tests in src/chain/pons.test.ts (chain id, canLaunch responds, scan
-  reports exists:false for a never-launched address), all passing against live RPC.
+- On-chain Pons v2 reader [feature_list.json index: 0] — still passes:true, now with
+  higher confidence after a fresh, independent audit (a separate session with no
+  memory of building this, told explicitly not to trust this repo's own docs) cloned
+  the repo cold and re-verified every claim from scratch. Full audit method and
+  findings are worth reading in the session transcript, not reproduced in full here;
+  the load-bearing points are captured below because they change what future
+  sessions should assume is true.
+
+  **Corrected: the "snipe-tax function doesn't exist" claim was wrong.** Session 2
+  read PonsV2BondingCurve.sol (777 lines) end to end, found zero mentions of "snipe",
+  and concluded the factory calls a function absent from the curve. The audit didn't
+  stop at the source repo — it did raw eth_call probes with real selectors against 3
+  live curves, with a negative control confirming the contract actually reverts
+  cleanly on an unknown selector (so this isn't a proxy silently swallowing bad
+  calls). Result: currentSnipeTaxBps(address) resolves without reverting on all 3
+  curves (returns 0 on all of them — every curve checked was at least a couple
+  minutes old, past the ~15s decay window, so 0 is consistent with "already decayed"
+  but not proven to be the only reason), and exemptFromSnipeTax(address) reverts with
+  a real NotFactory() custom error rather than an unknown-selector revert — meaning
+  the function exists and is access-gated, not missing. Conclusion: the DEPLOYED
+  bytecode has these functions even though ponsdotdev/ponsfamily's current public
+  HEAD doesn't. Lesson for this codebase and beyond: a "full read of the source
+  repo" is not equivalent to checking the actual deployed contract — the two can
+  and did diverge here. currentSnipeTaxBps is now implemented in scanLaunch
+  (src/chain/pons.ts:fetchSnipeTaxBps), called defensively (try/catch -> null on
+  failure) since the discrepancy itself is still unexplained.
+
+  **Real bug fixed: holder concentration denominator.** src/chain/holders.ts was
+  dividing the top holder's balance by the SUM OF THE FETCHED PAGE, not by the
+  token's real totalSupply (which scanLaunch already fetches separately and simply
+  wasn't passed through). Audit measured this overstating concentration by ~3
+  percentage points on a real token. Fixed: fetchHolderConcentration now takes
+  totalSupply as a parameter and divides by that; added hasMoreHolders (from
+  Blockscout's next_page_params) so callers can tell when the page was incomplete
+  without that affecting the share calculation itself.
+
+  **Real bug fixed: no error handling on any network call.** Audit reproduced a live
+  crash — a handful of sequential `scan` calls hit a 429 from the public RPC and the
+  CLI died with a raw unhandled stack trace. Added src/util/retry.ts (generic
+  retry-with-exponential-backoff, 3 retries default) wrapping both RPC calls in
+  scanLaunch; wrapped the whole CLI action in try/catch printing a one-line error and
+  exiting 1 instead of a raw trace (verified live: pointed RPC_URL at a dead endpoint,
+  got a clean caught error + exit code 1, not a crash). fetchDevBuys and
+  fetchHolderConcentration each independently catch their own failures and degrade to
+  an explicit "unavailable" value rather than either crashing or silently returning a
+  fake zero that would look identical to a genuine clean result — this distinction
+  (DevBuy is now `{available:true,...} | {available:false,reason}` instead of a bare
+  object) matters more than it looks: a bare 0 on failure is indistinguishable from a
+  verified zero, which is exactly the kind of silent-wrong-answer this whole project
+  exists to catch in *other* people's tools.
+
+  **Fixed, lower-severity:** RPC_URL in .env.example was never actually read
+  (createRobinhoodClient() was called with no argument) — now read via
+  Deno.env.get("RPC_URL") in cli.ts. init.sh's exit message said "No features are
+  wired up yet," stale since session 2. Removed node-telegram-bot-api from deno.json
+  — it was pinned for a feature that doesn't exist yet (Telegram alerts), audit found
+  it pulls the deprecated `request` package plus ~90 transitive deps with CVE
+  history in tough-cookie/uuid, all dead weight for code that isn't written. Added
+  automated tests for the retry utility (src/util/retry.test.ts) — total 5 tests, all
+  still pass against live RPC.
+
+  **Deliberately NOT changed:** @anthropic-ai/sdk stays in deno.json unused, same as
+  before — no equivalent problem was found with it (no deprecated/flagged transitive
+  deps), and it maps directly to the next planned feature, unlike telegram which was
+  further out. Not purging every unused dep reflexively, only the one with an
+  evidenced problem.
+
+  Re-verified end to end after all fixes: 5/5 tests pass against live RPC, scan
+  tested against multiple fresh live launches found independently (not the same
+  address reused every time), RPC_URL override confirmed working, clean-error-on-
+  network-failure confirmed working.
 
 ## What's in progress
 (none)
 
 ## What's next (recommended)
 - Repo/social authenticity fingerprint [feature_list.json index: 1]
-  Reason: second-most foundational signal, and the one the agent-judge feature needs
-  alongside the on-chain read to write a real verdict.
-  IMPORTANT gotcha already found by research (do not re-derive, just apply): GitHub
-  restricted the stargazers-listing endpoint to admin/collaborators as of ~July 2026.
-  REST /repos/{o}/{r}/stargazers now 404s for any third-party repo. GraphQL
-  `stargazers { edges { starredAt } }` does NOT error on a third-party repo — it
-  silently returns an EMPTY edges array even when stargazerCount confirms real stars
-  exist. A naive implementation would misread "access denied" as "zero stars, real
-  red flag" — this must be handled explicitly (report "star timing unavailable",
-  never treat empty as a genuine signal). Fork timing (`GET /repos/{o}/{r}/forks`,
-  `created_at` per fork) is NOT restricted and works fine — lean on that instead.
+  Reason: unchanged from session 2 — still the most foundational next signal.
+  GOTCHA (from session 2's research, still valid, re-confirm before relying on it if
+  much time has passed): GitHub restricted the stargazers-listing endpoint to
+  admin/collaborators as of ~July 2026. REST /repos/{o}/{r}/stargazers 404s for any
+  third-party repo. GraphQL `stargazers { edges { starredAt } }` does NOT error on a
+  third-party repo — it silently returns an EMPTY edges array even when
+  stargazerCount confirms real stars exist. Handle this explicitly (report "star
+  timing unavailable"), never treat empty as a genuine zero-stars signal — this is
+  the exact class of mistake this session just fixed in devBuy/holders, applied
+  in advance rather than after the fact this time. Fork timing (created_at per fork
+  via REST) is NOT restricted, still works.
 
 ## Notes for the next session
 Runtime is Deno (no Node/npm on this machine). `deno task start scan <address>`,
-`deno task test`. deno.lock pins resolved versions.
+`deno task test`. deno.lock pins resolved versions (regenerated this session after
+removing node-telegram-bot-api — if you add a new import, run `deno install` again
+before committing so the lockfile stays in sync).
 
-Verified Pons v2 / Robinhood Chain facts now baked into the code (src/chain/abi/*,
-src/chain/robinhoodChain.ts) — don't re-derive these, they're sourced and correct
-as of 2026-09-05:
-- Robinhood Chain id 4663, RPC https://rpc.mainnet.chain.robinhood.com (verified live
-  via eth_chainId). Public RPC is rate-limited per Robinhood's own docs — fine for
-  this tool's read volume, would need Alchemy/QuickNode for anything higher-frequency.
+Big-picture lesson from this session, worth carrying into every future one: session
+2 did real, careful, live verification (Blockscout API calls, a real eth_getLogs
+probe, a real end-to-end scan against a live launch) and was still meaningfully
+wrong about one central claim, because it verified against the *public source repo*
+and treated that as equivalent to verifying the *deployed contract*. Those came apart
+here. When the two could diverge (anything where "the docs/repo say X" is doing load-
+bearing work), prefer a live call against the actual deployed address over reading
+someone else's source tree, even a repo that's demonstrably the right one.
+
+Verified Pons v2 / Robinhood Chain facts, still holding as of this session's
+re-verification (2026-09-05):
+- Robinhood Chain id 4663, RPC https://rpc.mainnet.chain.robinhood.com. Public RPC
+  is rate-limited (confirmed by reproducing a real 429 this session) — fine for
+  `scan`'s occasional use now that retry/backoff exists, but the future `watch`
+  feature (continuous polling) will hit this harder and may need a paid RPC provider
+  or a longer backoff ceiling than the 3-retry default here.
 - Pons V2 factory 0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e and launch locker
-  0x267444D099b10fB5Ed7c3Cc7B7c767AdcA574952 — both verified on Blockscout, ABI
-  fragments in src/chain/abi/ were fetched live from Blockscout, not hand-transcribed.
-  Do NOT confuse with the V1 factory (0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB) —
-  different contract, no bonding curve, a generic web search surfaces this by mistake.
-- robinhoodchain.blockscout.com blocks bare curl (Cloudflare) but works fine with a
-  normal browser User-Agent header — see BROWSER_UA in src/chain/holders.ts.
-- KNOWN GAP, not fixed: the docs describe a "snipe tax" that decays from 99% to 0%
-  over the first few seconds after launch (docs say 5s; PonsV2LaunchFactory.sol says
-  15s by default, snapshotted per launch). PonsV2LaunchFactory.sol calls
-  `curve.currentSnipeTaxBps()` / `curve.exemptFromSnipeTax()` at launch time, but a
-  full read of PonsV2BondingCurve.sol (777 lines) found ZERO mentions of "snipe"
-  anywhere — those functions are not in the public curve source, so calling them
-  would fail against the real deployed contract. Deliberately NOT implemented in
-  scanLaunch rather than shipping a call that's confirmed broken. If this matters for
-  a later feature (it will, for anything timing a buy against the snipe-tax decay),
-  fetch the live verified ABI per-curve from Blockscout
-  (GET /api/v2/smart-contracts/{curve_address}) before trusting any quote math here —
-  don't hardcode the docs' 5s figure.
-- KNOWN GAP: holder concentration comes from Blockscout's /tokens/{address}/holders,
-  which is PAGINATED — `topHolderShare` in the output is the top holder's share of the
-  fetched page (default page size, first page only), not a verified figure across all
-  holders. Good enough as a first-pass signal, mislabel it and someone will screenshot
-  a wrong "50% concentration" claim as fact. Fix properly by paging through the whole
-  holder list before shipping this as something the agent-judge feature quotes as a
-  hard number.
-- V2 launch creation is whitelist-gated per the docs ("Read this before integrating"
-  box) and the protocol is explicitly unaudited (3rd-party audits in progress, none
-  closed) — despite the gating, real launches ARE happening (411 TokenLaunched events
-  observed in one ~13-minute sample window during this session), so there's no
-  shortage of live data to test against, but `warden` should probably surface
-  "protocol unaudited" as a standing disclosure somewhere in its own output eventually
-  — not done yet, low priority.
+  0x267444D099b10fB5Ed7c3Cc7B7c767AdcA574952 — both re-confirmed verified on
+  Blockscout this session, ABI fragments in src/chain/abi/ match live. Do NOT
+  confuse with the V1 factory (0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB).
+- robinhoodchain.blockscout.com needs a normal browser User-Agent (Cloudflare blocks
+  bare curl) — but is itself somewhat flaky even with the right UA (audit hit
+  transient empty/500 responses more than once this session). fetchHolderConcentration
+  already treats any fetch/parse failure as "return null," not a crash — keep that
+  pattern for anything else that calls this host.
+- fetchDevBuys still queries fromBlock: 0n with no upper bound on range width. Not
+  observed to actually break on any real curve yet (they're all young relative to
+  the ~10k-log limit that broke a query against the much busier factory contract
+  earlier), but it's unbounded by construction — now fails gracefully instead of
+  crashing (see DevBuy's available:false case) rather than being fully fixed. Proper
+  fix needs the curve's actual deployment block (e.g., from the TokenLaunched log)
+  to bound the range; not done, low urgency until a curve is old/busy enough to
+  actually hit it.
+- V2 launch creation is whitelist-gated and the protocol is explicitly unaudited,
+  but real launches keep happening (this session independently found and scanned
+  several more beyond session 2's one example) — still no shortage of live data.
 
-Dependency versions worth a deliberate bump when convenient (checked live against
-npm, not urgent for what's built so far — nothing implemented yet uses either):
-@anthropic-ai/sdk pinned at ^0.32.0 (resolved 0.32.1) vs. current 0.124.0 — bump
-before implementing the agent-judge feature. node-telegram-bot-api pinned at ^0.66.0
-vs. current 2.1.0 (a major-version jump, published 2026-09-04, actively maintained)
-— check what changed before implementing the Telegram-alert feature, don't just bump
-blindly.
+Dependency versions still worth a deliberate look when the relevant feature gets
+built: @anthropic-ai/sdk pinned at ^0.32.0 vs. current ~0.124.0 as of session 2's
+research — check again before implementing the agent-judge feature, don't assume
+that research is still current by then.
 
-Still true from the initializer session: this is an independently-derived
-implementation, not a copy of github.com/Phosphenq/bodkin (never read for this
-build) — protocol facts came from docs.ponsfamily.com, github.com/ponsdotdev/
-ponsfamily, and live Blockscout/RPC queries only. Do not commit a real .env.
+Still true: this is an independently-derived implementation, not a copy of
+github.com/Phosphenq/bodkin. This session's audit went further than "never read it"
+and actually cloned bodkin to diff the approach: bodkin's own code calls
+currentSnipeTaxBps too, but wraps it in `.catch(() => 0n)` — silently defaulting to
+"0% tax" on ANY failure, indistinguishable from a genuine 0. warden's snipeTaxBps
+is `bigint | null` specifically so a failed read can never be confused with a
+verified zero. Do not commit a real .env — confirmed clean across full git history
+this session, not just the current tree.

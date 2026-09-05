@@ -7,16 +7,17 @@ repo for authenticity red flags (account-age-vs-activity mismatch, fork/star
 bursts, a self-promoted ticker sitting in the README or the author's bio). An
 agent reasons over both and writes a plain-language verdict, not just a score.
 
-**Status: 1 of 7 features working end-to-end.** `warden scan <token>` reads a real
-Pons v2 launch live — curve progress, LP-lock, holder concentration, dev-buy
-history, mint/blacklist facts. Everything past that (repo fingerprinting, the
-agent verdict, alerts, execution) is still unbuilt. See
-[`feature_list.json`](feature_list.json) for the full list and
-[`claude-progress.txt`](claude-progress.txt) for session-by-session notes,
-including two protocol-level gotchas (a snipe-tax function the docs and the
-factory reference but the public curve source doesn't implement, and a July
-2026 GitHub API change that breaks star-timing checks) worth reading before
-touching either area.
+**Status: 1 of 7 features working end-to-end**, independently audited (a fresh
+review re-verified every claim from scratch rather than trusting this repo's
+own docs — see `claude-progress.txt` for what it found, including one
+correction to a claim this README used to make). `warden scan <token>` reads
+a real Pons v2 launch live — curve progress, LP-lock, holder concentration,
+dev-buy history, mint/blacklist facts, snipe-tax bps. Everything past that
+(repo fingerprinting, the agent verdict, alerts, execution) is still unbuilt.
+See [`feature_list.json`](feature_list.json) for the full list, and
+`claude-progress.txt` before touching the repo-fingerprint feature — a July
+2026 GitHub API change breaks star-timing checks in a way that fails silently
+rather than erroring.
 
 ## Why
 
@@ -72,15 +73,25 @@ Agent reasoning (not built yet) will use the Claude API.
 
 ## Known gaps
 
-- **Snipe-tax reads aren't implemented.** The docs and `PonsV2LaunchFactory.sol`
-  both reference a decaying anti-snipe tax read via `currentSnipeTaxBps()` on
-  the curve, but a full read of `PonsV2BondingCurve.sol` (777 lines) found no
-  such function anywhere in the public source. Calling it would fail against
-  the real contract, so `scan` doesn't try. See `claude-progress.txt` before
-  building anything that depends on snipe-tax timing.
-- **Holder concentration is a single page, not the full holder list.**
-  `topHolderShare` reflects Blockscout's first page of holders, not a
-  verified figure across every holder.
+- **Snipe-tax cause is unconfirmed.** `currentSnipeTaxBps()` *is* implemented
+  and called — an earlier version of this README said the function didn't
+  exist in the deployed contract, based on it being absent from
+  `ponsdotdev/ponsfamily`'s current public source. An independent audit
+  didn't stop at the source repo: it ran raw `eth_call` probes with real
+  selectors against 3 live curves (with a negative control confirming the
+  contract genuinely reverts on an unknown selector, not silently), and
+  found the function resolves cleanly on all 3 — it's in the deployed
+  bytecode even though it's missing from the public repo's current HEAD.
+  It returns `0` on every curve checked so far; every launch checked was at
+  least a couple of minutes old, past the ~15-second decay window described
+  in the docs, so `0` is consistent with "already decayed," not necessarily
+  proof the read is meaningless — this hasn't been confirmed on a launch
+  checked within seconds of creation.
+- **Holder concentration** now divides by the token's real `totalSupply`
+  (an earlier version divided by the sum of one fetched page instead, which
+  measurably overstated concentration — an audit caught a ~3 percentage
+  point error on a real token). `sampledHolders` / `hasMoreHolders` still
+  tell you whether Blockscout's holder list was fully fetched.
 - **Whitelist-gated protocol.** Pons v2 launch creation is currently
   whitelist-only and the protocol is explicitly unaudited per its own docs.
   Real launches are happening despite the gating (this is not a theoretical
