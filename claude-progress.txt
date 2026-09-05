@@ -1,83 +1,78 @@
 # Project: warden — agentic launch-vetting tool
-# Last updated: 2026-09-06 by session 4 (repo-authenticity fingerprint)
+# Last updated: 2026-09-06 by session 5 (agent-judge, blocked on credential)
 
 ## What's done
-- On-chain Pons v2 reader [feature_list.json index: 0] — unchanged this session.
-- Repo/social authenticity fingerprint [feature_list.json index: 1] — passes:true,
-  verified against real ground truth, not synthetic examples. `warden vet-repo
-  <owner>/<repo>` reports: account-created-at vs the account's oldest visible repo
-  (dormancyGapDays), fork creation timestamps and the largest cluster within a
-  30-minute sliding window, star COUNT only (timing deliberately unavailable, see
-  below), and text-mention scanning of the README + owner bio split into two
-  separately-reported buckets: contractAddressMentions (raw 0x... matches — weak
-  signal alone) and tickerMentions ($XXXX-style — much sharper signal).
+- On-chain reader [index 0] and repo fingerprint [index 1] — unchanged this session.
+- Agent-judge [feature_list.json index: 2] — IMPLEMENTED, still passes:false. This is
+  the first feature this project has built without full end-to-end verification, and
+  that's deliberate, not an oversight: this environment has no ANTHROPIC_API_KEY
+  (checked with `env | grep -i anthropic` — not set; there's an ANTHROPIC_BASE_URL
+  from the Claude Code session itself, but that's a separate credential scope and
+  not something to reach for here). Per this project's own standing rule (session 3's
+  audit, session 4's fingerprint work), passes only flips to true after a real
+  end-to-end run — not just code that compiles and a test suite that passes.
 
-  Verified two ways, both against real repos, not mocks:
-  1. Positive control: github.com/Phosphenq/bodkin — the exact repo this whole
-     project's "Why" is about. Ran `vet-repo` against it live and got
-     dormancyGapDays=2487 (matches the known ~6.8-year-old dormant account),
-     forkBurst={count:6, windowMinutes:30, first/last exactly 19m7s apart} (matches
-     the originally-researched "6 forks in a 19-minute window" finding to the
-     second), tickerMentions=[$BODKIN in readme, $BODKIN in bio] (matches). The tool
-     independently reproduces, from scratch, a red-flag profile that previously took
-     a full research pass to find by hand.
-  2. Negative control: github.com/ponsdotdev/ponsfamily (the real, legitimate Pons
-     contracts repo). This is what caught a real design flaw before it shipped: its
-     README legitimately mentions 4 contract addresses (V1/V2 factory addresses,
-     real technical documentation) — a naive single "token mention" signal would
-     have flagged this as shilling. Splitting into contractAddressMentions (weak,
-     common in any protocol-integration repo) vs tickerMentions (strong, near-zero
-     false-positive rate expected) fixed it: ponsfamily shows 4 contract-address
-     mentions and 0 ticker mentions, correctly not flagged.
+  What IS verified: src/judge/judge.ts builds a request against
+  @anthropic-ai/sdk (pinned ^0.123.0 — note 0.124.0 exists but was rejected by
+  Deno's own minimum-dependency-age supply-chain policy for being <24h old at
+  install time, a policy this project should keep respecting rather than
+  bypassing with --min-dep-age), with a forced tool_choice on a record_verdict
+  tool schema so the output shape (category/confidence/summary/signalsWeighed/
+  reasoningLog) is structurally guaranteed rather than hoped-for prose-parsing.
+  `warden judge <token> [--repo <owner>/<repo>]` runs the REAL scan (and real
+  vet-repo, if --repo given) pipeline, then fails with a clean, specific error
+  ("ANTHROPIC_API_KEY is not set - add it to .env before running judge") at the
+  model-call gate — reproduced live against a real launch found on-chain this
+  session (0x9308Ce1111c1e2B5d2C1a00b0Fc05cD5d67D49E7), exit code 1, no crash.
+  saveVerdictLog is tested directly (writes verdicts/<token>-<timestamp>.json,
+  reads back correctly) since it doesn't need the API. judgeLaunch's
+  no-API-key error path is also tested directly. 9/9 tests passing overall
+  (3 chain + 2 fingerprint + 2 retry + 2 judge).
 
-  Both are now automated tests (src/repo/fingerprint.test.ts) that skip cleanly
-  (Deno.test ignore) rather than failing confusingly when GITHUB_TOKEN isn't set —
-  unauthenticated GitHub API calls hit a much lower rate limit and 403'd outright on
-  one endpoint during this session's testing (reproduced live: unauthenticated
-  GET /users/ponsdotdev -> 403; same call with a token -> 200). Total test count
-  now 7/7 passing (3 chain + 2 fingerprint + 2 retry), all against live services,
-  no mocks anywhere in this codebase so far.
+  What is NOT verified: the actual model call. Never ran once. Unknown until
+  someone adds a real key: whether the model reliably calls record_verdict
+  (tool_choice should force this, per Anthropic's docs, but "should" isn't
+  "observed"), whether signalsWeighed entries actually cite real fields the way
+  the system prompt demands, whether the five pieces of "known context" baked
+  into the system prompt (lpLocked pre-graduation, contractAddressMentions vs
+  tickerMentions, snipeTaxBps=0 caveat, devBuy/holders null-vs-zero) actually
+  change the model's behavior the way they're meant to, or just get ignored.
 
 ## What's in progress
-(none)
+(none — judge is done as far as it can go without a credential only the user can add)
 
 ## What's next (recommended)
-- Agent-judge [feature_list.json index: 2]
-  Reason: both inputs it needs (on-chain scan, repo fingerprint) now exist and are
-  verified. This is the first feature that actually calls an LLM (the Claude API,
-  @anthropic-ai/sdk — already in deno.json, unused until now, check its pinned
-  version ^0.32.0 against current before writing code against it, session 2's
-  research found it already 3 minor versions stale as of 2026-09-05).
-  Design note carried forward from the architecture doc: the judge should write a
-  plain-language verdict + reasoning log citing the SPECIFIC signals it weighed
-  (feature_list.json's own acceptance criteria), not just a score — this is the
-  account's own "receipts over claims" standard applied to warden's own output, not
-  just the launches it evaluates.
+- To unblock judge: add a real ANTHROPIC_API_KEY to .env, run
+  `deno task start judge <token>` against a live launch (or `--repo Phosphenq/bodkin`
+  against the launch that inspired this whole project, if it's still live, for a
+  meaningful test case with real red flags to weigh), read the actual verdict JSON
+  and the saved reasoning log, and only then flip index 2 to true - or fix whatever
+  the real output reveals is wrong first.
+- Telegram alerts [feature_list.json index: 3] is next in priority order regardless
+  - likely to hit the same shape of blocker (needs a real TELEGRAM_BOT_TOKEN +
+  TELEGRAM_CHAT_ID this environment doesn't have) - implement it the same way judge
+  was handled: build it fully, verify everything that doesn't need the live
+  credential, fail cleanly and specifically at whatever does, be honest about what's
+  actually been exercised versus what's just "should work."
 
 ## Notes for the next session
-Runtime is Deno. `deno task start scan <address>`, `deno task start vet-repo
-<owner>/<repo>`, `deno task test`. Tests that hit the GitHub API need
-GITHUB_TOKEN in the environment or they skip (not fail) — `gh auth token` works
-fine as a source if `gh` is authenticated on the machine, same as this session did.
+Runtime is Deno. New this session: src/judge/judge.ts, src/judge/judge.test.ts.
+`verdicts/` is gitignored (runtime output, not source) - added to .gitignore this
+session.
 
-Two src/repo/ files exist now: github.ts (thin authenticated-fetch wrapper,
-falls back to unauthenticated if GITHUB_TOKEN unset) and fingerprint.ts (the
-actual vetRepo logic). Both are new surface area for the next session to be aware
-of alongside src/chain/.
+Standing pattern across this whole project, reapplied again here: don't claim more
+than what was actually run. A feature that's fully coded, type-checks, and has
+passing tests for everything reachable without a missing credential is still
+"not done" if the one thing it exists to do has never actually executed. This is
+the same instinct as session 3's audit correction and session 4's contractAddress-
+vs-ticker split, just applied one step earlier this time - catching it before
+ever claiming passes:true, instead of an audit catching it after.
 
-Standing lesson from session 3, reapplied successfully this session: don't ship a
-single blended "risk signal" out of two things with very different reliability —
-splitting contractAddressMentions from tickerMentions here is the direct
-application of the same principle as splitting DevBuy into
-available:true/false instead of a bare number that could silently mean either
-"zero" or "couldn't check." Look for this pattern before merging any two facts
-into one field for the rest of this project.
+Everything from sessions 3-4's notes still holds (chain addresses, the snipe-tax
+bytecode-vs-repo discrepancy, holder-concentration fix, GitHub star-timing
+restriction) - not repeated here, read the git log if it's been a while.
 
-Everything from session 3's notes about the on-chain side still holds (Robinhood
-Chain id 4663, Pons v2 factory/locker addresses, the snipe-tax bytecode-vs-public-
-repo discrepancy, holder-concentration denominator fix, retry/backoff wrapping) —
-not repeated here, read the git log (session 3's commit message has the full
-rationale) rather than trusting this file alone if it's been a while.
-
-Do not commit a real .env. GITHUB_TOKEN, same as the wallet key, only ever read
-from environment at runtime.
+Do not commit a real .env. If a session after this one DOES get a real
+ANTHROPIC_API_KEY to test with, that key still must only ever live in .env
+(gitignored), never in a commit, never printed to a log file that might get
+committed.

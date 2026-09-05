@@ -5,6 +5,7 @@ import { createRobinhoodClient } from "./chain/client.ts";
 import { fetchHolderConcentration } from "./chain/holders.ts";
 import { scanLaunch } from "./chain/pons.ts";
 import { vetRepo } from "./repo/fingerprint.ts";
+import { judgeLaunch, saveVerdictLog } from "./judge/judge.ts";
 
 const program = new Command();
 
@@ -78,6 +79,50 @@ program
     } catch (err) {
       console.error(
         `vet-repo failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      Deno.exit(1);
+    }
+  });
+
+program
+  .command("judge <token>")
+  .description(
+    "Combine an on-chain scan and (optionally) a repo fingerprint into a plain-language verdict",
+  )
+  .option("--repo <owner/repo>", "GitHub repo linked to this launch, if any")
+  .action(async (token: string, opts: { repo?: string }) => {
+    if (!isAddress(token)) {
+      console.error(`not a valid address: ${token}`);
+      Deno.exit(1);
+    }
+
+    try {
+      const client = createRobinhoodClient(Deno.env.get("RPC_URL"));
+      const scan = await scanLaunch(client, token);
+
+      if (!scan.exists) {
+        console.error(`${token} is not a Pons v2 launch on this factory`);
+        Deno.exit(1);
+      }
+
+      let fingerprint = null;
+      if (opts.repo) {
+        const [owner, repo] = opts.repo.split("/");
+        if (!owner || !repo || opts.repo.split("/").length !== 2) {
+          console.error(`--repo expected owner/repo, got: ${opts.repo}`);
+          Deno.exit(1);
+        }
+        fingerprint = await vetRepo(owner, repo);
+      }
+
+      const verdict = await judgeLaunch(scan, fingerprint);
+      const logPath = await saveVerdictLog(token, verdict);
+
+      console.log(JSON.stringify(verdict, null, 2));
+      console.error(`reasoning log saved: ${logPath}`);
+    } catch (err) {
+      console.error(
+        `judge failed: ${err instanceof Error ? err.message : String(err)}`,
       );
       Deno.exit(1);
     }

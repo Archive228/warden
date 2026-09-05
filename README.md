@@ -16,8 +16,11 @@ LP-lock, holder concentration, dev-buy history, mint/blacklist facts,
 snipe-tax bps. `warden vet-repo <owner>/<repo>` fingerprints a GitHub repo for
 the exact red-flag pattern that inspired this project (see "Why") — verified
 against that real repo as ground truth, not just synthetic examples (see
-`claude-progress.txt`). The agent verdict, alerts, and execution are still
-unbuilt — see [`feature_list.json`](feature_list.json) for the full list.
+`claude-progress.txt`). `warden judge <token>` is implemented and wired
+end-to-end through the real pipeline, but **not yet verified** — this
+environment has no `ANTHROPIC_API_KEY`, so the actual model call has never
+run; add one to `.env` and re-run before trusting its output (see
+`feature_list.json`). Alerts and execution are still unbuilt.
 
 ## Why
 
@@ -59,8 +62,13 @@ Requires [Deno](https://deno.com) 2.x — no Node/npm needed.
 ./init.sh
 deno task start scan <token-address>
 deno task start vet-repo <owner>/<repo>
+deno task start judge <token-address> [--repo <owner>/<repo>]
 deno task test
 ```
+
+`judge` needs `ANTHROPIC_API_KEY` in `.env` — without it, it fails with a
+clear error rather than a crash, but nobody has verified what it actually
+says with a real key yet.
 
 `vet-repo` works unauthenticated but at GitHub's much lower rate limit (and
 some endpoints 403 outright without one, reproduced live against

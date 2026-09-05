@@ -24,9 +24,10 @@
     "category": "functional",
     "description": "an LLM agent combines the on-chain read and the repo fingerprint into a plain-language verdict with a reasoning log, not just a score",
     "steps": [
-      "Run `warden judge <address>` on a launch with both on-chain and repo data available",
-      "Verify the output is a written verdict (not just a number) that cites the specific signals it weighed",
-      "Verify a reasoning log is saved alongside the verdict"
+      "Run `warden judge <address> [--repo <owner>/<repo>]` on a launch with on-chain data (and optionally repo fingerprint data) available",
+      "Verify the output is a written verdict (not just a number) that cites the specific signals it weighed, each tied to a real field/value from the input, not a vague claim",
+      "Verify a reasoning log is saved alongside the verdict (verdicts/<token>-<timestamp>.json)",
+      "BLOCKED on live verification: this environment has no ANTHROPIC_API_KEY (checked, not set, and the Claude Code session's own credentials are a separate thing not to be smuggled in here). Implementation is done, wired end-to-end through the real scan+vet-repo pipeline, and fails cleanly with an actionable error at the API-key gate (verified live against a real launch) - but the actual model call, its output shape, and whether it follows the system prompt's rules have NOT been exercised. Add a real key to .env and re-run before flipping this to true."
     ],
     "passes": false
   },
