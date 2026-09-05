@@ -10,17 +10,25 @@ agent reasons over both and writes a plain-language verdict, not just a score.
 **Status: 2 of 7 features working end-to-end**, the first one independently
 audited (a fresh review re-verified every claim from scratch rather than
 trusting this repo's own docs — see `claude-progress.txt` for what it found,
-including one correction to a claim this README used to make).
+including one correction to a claim this README used to make). Two more
+(`judge`, `watch`) are fully implemented and wired through the real pipeline
+but not yet verified end-to-end, both blocked on the same shape of gap: a
+credential this environment doesn't have. See `feature_list.json` for exactly
+what's confirmed vs. still open on each.
+
 `warden scan <token>` reads a real Pons v2 launch live — curve progress,
 LP-lock, holder concentration, dev-buy history, mint/blacklist facts,
 snipe-tax bps. `warden vet-repo <owner>/<repo>` fingerprints a GitHub repo for
 the exact red-flag pattern that inspired this project (see "Why") — verified
-against that real repo as ground truth, not just synthetic examples (see
-`claude-progress.txt`). `warden judge <token>` is implemented and wired
-end-to-end through the real pipeline, but **not yet verified** — this
-environment has no `ANTHROPIC_API_KEY`, so the actual model call has never
-run; add one to `.env` and re-run before trusting its output (see
-`feature_list.json`). Alerts and execution are still unbuilt.
+against that real repo as ground truth, not just synthetic examples.
+`warden judge <token>` calls Claude to turn a scan (+ optional repo
+fingerprint) into a plain-language verdict — implementation and pipeline
+wiring verified live, the actual model call is not (no `ANTHROPIC_API_KEY`
+here). `warden watch` polls for new launches and alerts each verdict to
+Telegram — the polling loop is verified against real chain state (and caught
+two real bugs live in the process, see `claude-progress.txt`), but no message
+has ever actually reached Telegram (no bot credentials here either).
+Execution is still unbuilt.
 
 ## Why
 
@@ -63,12 +71,15 @@ Requires [Deno](https://deno.com) 2.x — no Node/npm needed.
 deno task start scan <token-address>
 deno task start vet-repo <owner>/<repo>
 deno task start judge <token-address> [--repo <owner>/<repo>]
+deno task start watch --once <token-address>   # test feed, one launch, no waiting
+deno task start watch                          # live feed, polls forever, ctrl-c to stop
 deno task test
 ```
 
-`judge` needs `ANTHROPIC_API_KEY` in `.env` — without it, it fails with a
-clear error rather than a crash, but nobody has verified what it actually
-says with a real key yet.
+`judge` needs `ANTHROPIC_API_KEY` and `watch` additionally needs
+`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` in `.env` — without them, both fail
+with a clear, specific error rather than a crash, but nobody has verified
+what a real model call or a real Telegram message actually looks like yet.
 
 `vet-repo` works unauthenticated but at GitHub's much lower rate limit (and
 some endpoints 403 outright without one, reproduced live against
@@ -122,6 +133,14 @@ Agent reasoning (not built yet) will use the Claude API.
   tool — every number above came from a live launch found on-chain the same
   day this was written), but that status is worth surfacing to a user
   eventually rather than staying buried in this README.
+- **The public RPC rate-limits under sustained `watch` polling** — reproduced
+  live, not theoretical: a test run of `watch` hit "Too Many Requests" from
+  `rpc.mainnet.chain.robinhood.com` after enough consecutive poll cycles, even
+  with retry/backoff already in place. It degrades the way it's supposed to
+  (`watch` logs the error and keeps running instead of crashing), but a
+  free public RPC has a real ceiling. For anything beyond light testing, point
+  `RPC_URL` at a paid provider (Alchemy/QuickNode — the protocol's own docs
+  recommend this for production use, not just this project).
 
 ## License
 

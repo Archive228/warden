@@ -36,8 +36,9 @@
     "description": "warden pushes each verdict to a Telegram chat in real time as new launches are scanned",
     "steps": [
       "Configure a Telegram bot token and chat id",
-      "Run `warden watch` against a live or test feed",
-      "Verify a message with the verdict and key signals arrives in the configured Telegram chat"
+      "Run `warden watch` (live feed - polls the real factory) or `warden watch --once <token>` (test feed - one already-known launch, no waiting)",
+      "Verify a message with the verdict and key signals arrives in the configured Telegram chat",
+      "BLOCKED on live verification, same shape of gap as the judge feature: no TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID exist for this project yet. What IS verified live: the full watch loop polling real chain state and finding real launches (a live regression run surfaced two real bugs, both now fixed - see claude-progress.txt for the empty-string --once bug and the public-RPC rate-limit-under-sustained-polling finding), sendTelegramAlert failing cleanly and specifically without credentials, and formatVerdictMessage's output shape (unit tested). Never actually delivered a message. Create a real bot via @BotFather, add its token + your chat id to .env, and re-run before flipping this to true."
     ],
     "passes": false
   },

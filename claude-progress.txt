@@ -1,78 +1,104 @@
 # Project: warden — agentic launch-vetting tool
-# Last updated: 2026-09-06 by session 5 (agent-judge, blocked on credential)
+# Last updated: 2026-09-06 by session 6 (telegram alerts + watch loop; 2 real bugs caught live)
 
 ## What's done
-- On-chain reader [index 0] and repo fingerprint [index 1] — unchanged this session.
-- Agent-judge [feature_list.json index: 2] — IMPLEMENTED, still passes:false. This is
-  the first feature this project has built without full end-to-end verification, and
-  that's deliberate, not an oversight: this environment has no ANTHROPIC_API_KEY
-  (checked with `env | grep -i anthropic` — not set; there's an ANTHROPIC_BASE_URL
-  from the Claude Code session itself, but that's a separate credential scope and
-  not something to reach for here). Per this project's own standing rule (session 3's
-  audit, session 4's fingerprint work), passes only flips to true after a real
-  end-to-end run — not just code that compiles and a test suite that passes.
+- On-chain reader [0], repo fingerprint [1] — unchanged.
+- Agent-judge [2] — unchanged, still blocked on ANTHROPIC_API_KEY, see session 5's notes.
+- Telegram alerts [feature_list.json index: 3] — IMPLEMENTED, passes:false (same shape
+  of gap as judge: no TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID in this environment, so no
+  message has ever actually reached Telegram). What's new:
+  - src/alerts/telegram.ts: sendTelegramAlert, a single fetch() POST to Telegram's
+    Bot API. Deliberately NOT a bot-framework dependency (node-telegram-bot-api was
+    already removed once this project for pulling deprecated transitive deps for a
+    feature that didn't exist yet - same logic applies here even harder, since
+    warden never needs to RECEIVE Telegram updates, only send one message).
+  - src/alerts/format.ts: formatVerdictMessage, a pure function, fully unit tested
+    without needing any credential.
+  - src/watch/watch.ts: findNewLaunchesSince (polls the factory for new
+    TokenLaunched events since a given block) and watchLaunches (the poll loop:
+    calls onLaunch per new token, catches and reports errors per-launch via
+    onError instead of letting one bad launch kill an hours-long process).
+  - `warden watch` wires it together: poll -> scanLaunch -> judgeLaunch(scan, null)
+    -> saveVerdictLog -> sendTelegramAlert. `warden watch --once <token>` runs the
+    same pipeline against one already-known launch immediately - this is the "test
+    feed" feature_list.json's steps call for, so `watch` doesn't require waiting on
+    a real new launch to test the wiring.
 
-  What IS verified: src/judge/judge.ts builds a request against
-  @anthropic-ai/sdk (pinned ^0.123.0 — note 0.124.0 exists but was rejected by
-  Deno's own minimum-dependency-age supply-chain policy for being <24h old at
-  install time, a policy this project should keep respecting rather than
-  bypassing with --min-dep-age), with a forced tool_choice on a record_verdict
-  tool schema so the output shape (category/confidence/summary/signalsWeighed/
-  reasoningLog) is structurally guaranteed rather than hoped-for prose-parsing.
-  `warden judge <token> [--repo <owner>/<repo>]` runs the REAL scan (and real
-  vet-repo, if --repo given) pipeline, then fails with a clean, specific error
-  ("ANTHROPIC_API_KEY is not set - add it to .env before running judge") at the
-  model-call gate — reproduced live against a real launch found on-chain this
-  session (0x9308Ce1111c1e2B5d2C1a00b0Fc05cD5d67D49E7), exit code 1, no crash.
-  saveVerdictLog is tested directly (writes verdicts/<token>-<timestamp>.json,
-  reads back correctly) since it doesn't need the API. judgeLaunch's
-  no-API-key error path is also tested directly. 9/9 tests passing overall
-  (3 chain + 2 fingerprint + 2 retry + 2 judge).
+  **Two real bugs found live, both fixed, both worth internalizing:**
 
-  What is NOT verified: the actual model call. Never ran once. Unknown until
-  someone adds a real key: whether the model reliably calls record_verdict
-  (tool_choice should force this, per Anthropic's docs, but "should" isn't
-  "observed"), whether signalsWeighed entries actually cite real fields the way
-  the system prompt demands, whether the five pieces of "known context" baked
-  into the system prompt (lpLocked pre-graduation, contractAddressMentions vs
-  tickerMentions, snipeTaxBps=0 caveat, devBuy/holders null-vs-zero) actually
-  change the model's behavior the way they're meant to, or just get ignored.
+  1. **CLI arg-parsing bug.** `if (opts.once)` treats a falsy-but-provided value
+     (an empty string) the same as "flag not given," so `watch --once ""` silently
+     fell into the infinite poll loop instead of failing validation. Caught by
+     accident: a curl call to find a fresh test token failed, fed an empty string
+     through as `--once ""`, and the process had to be killed by hand rather than
+     exiting on its own with a clear error - it looked like a hang, and for a few
+     minutes genuinely was mistaken for one, before checking the actual output
+     revealed it had been happily polling the whole time. Fixed to
+     `opts.once !== undefined`. Now has a real regression test (src/cli.test.ts)
+     that spawns the actual CLI as a subprocess with `--once ""` and asserts it
+     exits 1 immediately rather than logging "watching for new launches."
+     Lesson: `if (someOptionalString)` is almost never what you mean for a CLI
+     flag - it conflates "not given" with "given an empty/falsy value," and the
+     two should almost always be handled differently.
+
+  2. **Confirmed, not just predicted: the public RPC rate-limits under sustained
+     watch polling.** The same accidental long-running test (before it was killed)
+     logged several clean "ANTHROPIC_API_KEY is not set" errors as real launches
+     came in - proving the per-launch error isolation works exactly as designed -
+     and THEN started logging "429 Too Many Requests" from
+     rpc.mainnet.chain.robinhood.com on both eth_call and eth_blockNumber, even
+     with the existing retry/backoff (3 retries, exponential) in scanLaunch. This
+     was flagged as a predicted risk in session 3's notes ("the future watch
+     feature will hit this harder") - now it's not a prediction, it's a reproduced
+     fact. Response so far: bumped the default --poll-interval-ms from 15000 to
+     30000 (cuts request volume, doesn't eliminate the ceiling), and documented in
+     the README that real sustained use needs a paid RPC provider (Alchemy/
+     QuickNode - the protocol's own docs recommend this for production regardless
+     of warden). Did NOT attempt a deeper fix (a request queue/throttle across
+     concurrent launch processing, or raising retry limits further) - diminishing
+     returns against a free-tier rate limit that a paid RPC solves directly.
+
+  15/15 tests passing (3 chain + 2 fingerprint + 2 retry + 2 judge + 1 format +
+  1 telegram + 3 watch + 1 cli regression). deno.json's test task now needs
+  --allow-write (saveVerdictLog test) and --allow-run (the subprocess-spawning
+  regression test) in addition to the existing --allow-net --allow-env --allow-read.
 
 ## What's in progress
-(none — judge is done as far as it can go without a credential only the user can add)
+(none)
 
 ## What's next (recommended)
-- To unblock judge: add a real ANTHROPIC_API_KEY to .env, run
-  `deno task start judge <token>` against a live launch (or `--repo Phosphenq/bodkin`
-  against the launch that inspired this whole project, if it's still live, for a
-  meaningful test case with real red flags to weigh), read the actual verdict JSON
-  and the saved reasoning log, and only then flip index 2 to true - or fix whatever
-  the real output reveals is wrong first.
-- Telegram alerts [feature_list.json index: 3] is next in priority order regardless
-  - likely to hit the same shape of blocker (needs a real TELEGRAM_BOT_TOKEN +
-  TELEGRAM_CHAT_ID this environment doesn't have) - implement it the same way judge
-  was handled: build it fully, verify everything that doesn't need the live
-  credential, fail cleanly and specifically at whatever does, be honest about what's
-  actually been exercised versus what's just "should work."
+- Dry-run/--live execution gate [feature_list.json index: 4] is next in priority
+  order. This is the one that touches a real wallet private key and can submit a
+  real transaction with real money - treat it with more care than anything built
+  so far, not less, even though the mechanics (an if-statement gating a
+  sendTransaction call) are simple. Concretely:
+  - Keep dry-run as the hard default; --live must be an explicit, unambiguous flag.
+  - Do NOT test this by actually funding a wallet and submitting a real mainnet
+    transaction. Verify the GATE (no tx without --live, no tx below
+    --min-confidence, every attempted trade logged with the verdict that
+    triggered it) with a wallet that has zero balance or on a path that never
+    reaches the actual broadcast call - the point is to prove the safety logic is
+    airtight, not to prove the trade itself works.
+  - This project has caught real bugs by testing against live state every single
+    feature so far (session 3's audit, session 4's contractAddress split, this
+    session's two bugs) - the temptation to relax that discipline "just this once"
+    because real execution is harder to safely test is exactly backwards; if
+    anything this feature deserves MORE scrutiny before passes:true, not a pass on
+    reduced verification because live-testing it responsibly is harder.
+- To unblock judge/watch for real: add ANTHROPIC_API_KEY (and, for watch,
+  TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from @BotFather) to .env, then re-run and
+  read the actual output before flipping either to true.
 
 ## Notes for the next session
-Runtime is Deno. New this session: src/judge/judge.ts, src/judge/judge.test.ts.
-`verdicts/` is gitignored (runtime output, not source) - added to .gitignore this
-session.
+Runtime is Deno. Commands so far: scan, vet-repo, judge, watch (--once or polling).
+New dirs this session: src/alerts/, src/watch/, plus src/cli.test.ts at the root of
+src/ (a CLI-level regression test, not tied to one module).
 
-Standing pattern across this whole project, reapplied again here: don't claim more
-than what was actually run. A feature that's fully coded, type-checks, and has
-passing tests for everything reachable without a missing credential is still
-"not done" if the one thing it exists to do has never actually executed. This is
-the same instinct as session 3's audit correction and session 4's contractAddress-
-vs-ticker split, just applied one step earlier this time - catching it before
-ever claiming passes:true, instead of an audit catching it after.
-
-Everything from sessions 3-4's notes still holds (chain addresses, the snipe-tax
+Everything from sessions 3-5's notes still holds (chain addresses, snipe-tax
 bytecode-vs-repo discrepancy, holder-concentration fix, GitHub star-timing
-restriction) - not repeated here, read the git log if it's been a while.
+restriction, judge's unverified-model-call status) - not repeated here.
 
-Do not commit a real .env. If a session after this one DOES get a real
-ANTHROPIC_API_KEY to test with, that key still must only ever live in .env
-(gitignored), never in a commit, never printed to a log file that might get
-committed.
+Do not commit a real .env. Same standing rule, now covering four credentials
+instead of one: RPC_URL (optional, has a public default), GITHUB_TOKEN (optional,
+degrades to a lower rate limit), ANTHROPIC_API_KEY (required for judge/watch),
+TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (required for watch's actual alert delivery).

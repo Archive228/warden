@@ -5,7 +5,7 @@
   "exports": "./src/cli.ts",
   "tasks": {
     "start": "deno run --allow-net --allow-env --allow-read --allow-write src/cli.ts",
-    "test": "deno test --allow-net --allow-env --allow-read --allow-write"
+    "test": "deno test --allow-net --allow-env --allow-read --allow-write --allow-run"
   },
   "imports": {
     "viem": "npm:viem@^2.21.0",
