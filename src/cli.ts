@@ -9,6 +9,8 @@ import { judgeLaunch, saveVerdictLog } from "./judge/judge.ts";
 import { formatVerdictMessage } from "./alerts/format.ts";
 import { sendTelegramAlert } from "./alerts/telegram.ts";
 import { watchLaunches } from "./watch/watch.ts";
+import { decideTrade, type TradeOptions } from "./execute/decide.ts";
+import { logTradeDecision } from "./execute/tradelog.ts";
 import type { Address } from "viem";
 
 const program = new Command();
@@ -135,6 +137,7 @@ program
 async function processLaunch(
   client: ReturnType<typeof createRobinhoodClient>,
   token: Address,
+  tradeOpts: TradeOptions,
 ): Promise<void> {
   const scan = await scanLaunch(client, token);
   if (!scan.exists) return;
@@ -148,57 +151,104 @@ async function processLaunch(
   );
 
   await sendTelegramAlert(formatVerdictMessage(token, verdict));
+
+  const decision = await decideTrade(scan, verdict, tradeOpts);
+  await logTradeDecision(decision);
+  console.log(
+    `[trade] ${token}: attempted=${decision.attempted} - ${decision.reason}`,
+  );
 }
 
 program
   .command("watch")
   .description(
-    "Poll for new Pons v2 launches, judge each one, and alert to Telegram. Alert-only - never submits a transaction.",
+    "Poll for new Pons v2 launches, judge each one, and alert to Telegram. Dry-run by default - only submits a transaction with --live, above --min-confidence, and only on native-ETH-paired launches.",
   )
   .option(
     "--once <token>",
     "process a single already-known token immediately instead of polling for new launches - for testing the pipeline without waiting",
   )
   .option("--poll-interval-ms <ms>", "polling interval", "30000")
-  .action(async (opts: { once?: string; pollIntervalMs: string }) => {
-    const client = createRobinhoodClient(Deno.env.get("RPC_URL"));
+  .option(
+    "--live",
+    "actually submit a buy transaction when a verdict clears the threshold (requires WALLET_PRIVATE_KEY). Without this flag, every launch is alert-only, unconditionally, regardless of verdict.",
+    false,
+  )
+  .option(
+    "--min-confidence <n>",
+    "minimum verdict confidence (0-1) to buy, on a low_risk verdict only",
+    "0.8",
+  )
+  .option("--buy-amount-eth <n>", "ETH to spend per buy", "0.01")
+  .option("--slippage-bps <n>", "slippage tolerance in basis points", "300")
+  .action(
+    async (
+      opts: {
+        once?: string;
+        pollIntervalMs: string;
+        live: boolean;
+        minConfidence: string;
+        buyAmountEth: string;
+        slippageBps: string;
+      },
+    ) => {
+      const client = createRobinhoodClient(Deno.env.get("RPC_URL"));
+      const tradeOpts: TradeOptions = {
+        live: opts.live,
+        minConfidence: Number(opts.minConfidence),
+        buyAmountEth: opts.buyAmountEth,
+        slippageBps: Number(opts.slippageBps),
+      };
 
-    // opts.once !== undefined, NOT `if (opts.once)`: a falsy-but-provided
-    // value (like an empty string from a bad shell substitution - this
-    // exact bug shipped once, caught live when a curl failure fed
-    // `--once ""` through and it silently fell into the infinite poll
-    // loop instead of erroring) must still hit validation below, not
-    // silently take the "no value given" branch.
-    if (opts.once !== undefined) {
-      if (!isAddress(opts.once)) {
-        console.error(`not a valid address: ${opts.once}`);
-        Deno.exit(1);
-      }
-      try {
-        await processLaunch(client, opts.once);
-      } catch (err) {
-        console.error(
-          `watch --once failed: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+      if (opts.live) {
+        console.log(
+          `--live is ON: will attempt real buys (${opts.buyAmountEth} ETH each) on low_risk verdicts >= ${opts.minConfidence} confidence, native-ETH-paired launches only.`,
         );
-        Deno.exit(1);
       }
-      return;
-    }
 
-    console.log(
-      "watching for new Pons v2 launches (alert-only, ctrl-c to stop)...",
-    );
-    await watchLaunches(client, (token) => processLaunch(client, token), {
-      pollIntervalMs: Number(opts.pollIntervalMs),
-      onError: (err) =>
-        console.error(
-          `watch error (continuing): ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        ),
-    });
-  });
+      // opts.once !== undefined, NOT `if (opts.once)`: a falsy-but-provided
+      // value (like an empty string from a bad shell substitution - this
+      // exact bug shipped once, caught live when a curl failure fed
+      // `--once ""` through and it silently fell into the infinite poll
+      // loop instead of erroring) must still hit validation below, not
+      // silently take the "no value given" branch.
+      if (opts.once !== undefined) {
+        if (!isAddress(opts.once)) {
+          console.error(`not a valid address: ${opts.once}`);
+          Deno.exit(1);
+        }
+        try {
+          await processLaunch(client, opts.once, tradeOpts);
+        } catch (err) {
+          console.error(
+            `watch --once failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+          Deno.exit(1);
+        }
+        return;
+      }
+
+      console.log(
+        `watching for new Pons v2 launches (${
+          opts.live ? "LIVE" : "alert-only"
+        }, ctrl-c to stop)...`,
+      );
+      await watchLaunches(
+        client,
+        (token) => processLaunch(client, token, tradeOpts),
+        {
+          pollIntervalMs: Number(opts.pollIntervalMs),
+          onError: (err) =>
+            console.error(
+              `watch error (continuing): ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            ),
+        },
+      );
+    },
+  );
 
 program.parse(Deno.args, { from: "user" });

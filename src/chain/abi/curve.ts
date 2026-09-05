@@ -16,6 +16,23 @@
 // called defensively (see fetchSnipeTaxBps in pons.ts) since the
 // discrepancy itself is unexplained.
 export const ponsV2CurveAbi = [
+  // Confirmed by reading the real buy() body in PonsV2BondingCurve.sol:
+  // fee and creatorTax are deducted from quoteIn FIRST, then the remainder
+  // is priced through the constant-product formula with feeBps=0 - not the
+  // raw quoteIn priced with feeBps applied inside the formula. See
+  // src/execute/quote.ts, which replicates this exact order, not a
+  // simplification of it.
+  {
+    inputs: [
+      { internalType: "uint256", name: "quoteIn", type: "uint256" },
+      { internalType: "uint256", name: "minTokensOut", type: "uint256" },
+      { internalType: "address", name: "recipient", type: "address" },
+    ],
+    name: "buy",
+    outputs: [{ internalType: "uint256", name: "tokensOut", type: "uint256" }],
+    stateMutability: "payable",
+    type: "function",
+  },
   {
     inputs: [{ internalType: "address", name: "recipient", type: "address" }],
     name: "currentSnipeTaxBps",

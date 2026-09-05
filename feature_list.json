@@ -46,10 +46,10 @@
     "category": "functional",
     "description": "warden defaults to dry-run (alert-only, no trade execution) and requires an explicit --live flag plus a verdict-confidence threshold before it will submit any transaction",
     "steps": [
-      "Run `warden watch` without --live",
-      "Verify no transaction is ever submitted, only alerts",
-      "Run `warden watch --live --min-confidence 0.8`",
-      "Verify a transaction is only submitted when the agent's verdict confidence clears the threshold, and every auto-trade is logged with the verdict that triggered it"
+      "Run `warden watch` without --live: verify no transaction is ever submitted, only alerts",
+      "Run `warden watch --live --min-confidence 0.8 --buy-amount-eth <n>`: verify a transaction is only submitted when the verdict is low_risk AND confidence clears the threshold AND the launch is paired with native ETH (not an ERC20 - only that path is implemented), and that every decision - attempted or not - is logged (verdicts/trades.jsonl) with the verdict that triggered it",
+      "Verify the slippage-protected minTokensOut this project computes off-chain (src/execute/quote.ts) matches what the real curve contract itself computes, via a live eth_call simulation - not by trusting the formula was transcribed correctly",
+      "DELIBERATELY NOT LIVE-TESTED beyond simulation: this is the one feature that can move real money, and this project's own standing rule (do not fund a wallet or broadcast a real transaction to verify a feature) means passes stays false regardless of how solid the gate logic and simulation results are. What IS verified, live: the exact buy(uint256,uint256,address) signature (read from real source, not guessed), the off-chain slippage-floor math is BIT-FOR-BIT identical to a real curve's own simulateContract result (0 bps difference, cross-checked live), the safety gate itself has 7 passing unit tests covering every combination of verdict/confidence/pair-type/--live, and a live end-to-end run of `watch --once <token> --live` correctly printed the --live warning banner and still failed cleanly at an earlier, unrelated gate (no ANTHROPIC_API_KEY) - proving --live doesn't bypass any upstream check. A live buy-simulation against a real launch also surfaced a real gap this project didn't know it had: some launches are paired with an ERC20 quote token, not native ETH (~30% in one sample) - only the native path is implemented, and the gate explicitly refuses (not silently mishandles) the ERC20 case."
     ],
     "passes": false
   },

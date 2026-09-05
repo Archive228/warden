@@ -28,7 +28,12 @@ here). `warden watch` polls for new launches and alerts each verdict to
 Telegram — the polling loop is verified against real chain state (and caught
 two real bugs live in the process, see `claude-progress.txt`), but no message
 has ever actually reached Telegram (no bot credentials here either).
-Execution is still unbuilt.
+`watch --live` gates a real `buy()` behind verdict + confidence + native-ETH-
+pairing checks (7 passing unit tests on the gate itself) and its slippage
+math is bit-for-bit verified against a real curve's own on-chain simulation —
+but has deliberately never broadcast a real transaction. This project does
+not fund a wallet or spend real money to verify its own features, on
+principle, regardless of how solid the surrounding logic tests out.
 
 ## Why
 
@@ -58,8 +63,11 @@ on-chain multicall  --------->  repo/social fingerprint (if linked)
               Telegram alert
                      |
                      v
-       (--live only, above --min-confidence)
-              optional trade
+   verdict==low_risk && confidence>=threshold
+       && native-ETH-paired (not ERC20)
+                     |
+                     v
+       (--live only) buy(), slippage-bounded
 ```
 
 ## Run
@@ -73,13 +81,16 @@ deno task start vet-repo <owner>/<repo>
 deno task start judge <token-address> [--repo <owner>/<repo>]
 deno task start watch --once <token-address>   # test feed, one launch, no waiting
 deno task start watch                          # live feed, polls forever, ctrl-c to stop
+deno task start watch --live --min-confidence 0.9 --buy-amount-eth 0.01 --slippage-bps 300
 deno task test
 ```
 
-`judge` needs `ANTHROPIC_API_KEY` and `watch` additionally needs
-`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` in `.env` — without them, both fail
-with a clear, specific error rather than a crash, but nobody has verified
-what a real model call or a real Telegram message actually looks like yet.
+`judge` needs `ANTHROPIC_API_KEY`, `watch` additionally needs
+`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`, and `watch --live` additionally
+needs `WALLET_PRIVATE_KEY` in `.env` — without them, all fail with a clear,
+specific error rather than a crash. Without `--live`, `watch` never reads
+`WALLET_PRIVATE_KEY` at all. Every trade decision (attempted or not) is
+appended to `verdicts/trades.jsonl`, one JSON object per line.
 
 `vet-repo` works unauthenticated but at GitHub's much lower rate limit (and
 some endpoints 403 outright without one, reproduced live against
@@ -141,6 +152,20 @@ Agent reasoning (not built yet) will use the Claude API.
   free public RPC has a real ceiling. For anything beyond light testing, point
   `RPC_URL` at a paid provider (Alchemy/QuickNode — the protocol's own docs
   recommend this for production use, not just this project).
+- **Only native-ETH-paired launches can be bought.** `getLaunchedToken`
+  returns a `pairToken` field this project didn't even expose until building
+  the buy path — some launches are quoted in an ERC20 instead of ETH (~30%
+  in one live sample, found by accident when a buy-simulation reverted with
+  `UnexpectedNativeValue()` on one). `watch --live` explicitly refuses these
+  rather than attempting a transaction that would revert or, worse, be
+  silently wrong.
+- **Real execution has never been tested with real money, deliberately.**
+  Everything short of an actual broadcast is verified: the exact `buy()`
+  signature (from real source), slippage math matched bit-for-bit against a
+  real curve's own `simulateContract` result, and 7 unit tests on the
+  verdict/confidence/pairing/`--live` gate. Funding a wallet and confirming
+  a real transaction lands is a decision for whoever runs this with their
+  own funds, not something this project does on its own to tick a box.
 
 ## License
 

@@ -1,104 +1,125 @@
 # Project: warden — agentic launch-vetting tool
-# Last updated: 2026-09-06 by session 6 (telegram alerts + watch loop; 2 real bugs caught live)
+# Last updated: 2026-09-06 by session 7 (dry-run/--live execution gate)
 
 ## What's done
-- On-chain reader [0], repo fingerprint [1] — unchanged.
-- Agent-judge [2] — unchanged, still blocked on ANTHROPIC_API_KEY, see session 5's notes.
-- Telegram alerts [feature_list.json index: 3] — IMPLEMENTED, passes:false (same shape
-  of gap as judge: no TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID in this environment, so no
-  message has ever actually reached Telegram). What's new:
-  - src/alerts/telegram.ts: sendTelegramAlert, a single fetch() POST to Telegram's
-    Bot API. Deliberately NOT a bot-framework dependency (node-telegram-bot-api was
-    already removed once this project for pulling deprecated transitive deps for a
-    feature that didn't exist yet - same logic applies here even harder, since
-    warden never needs to RECEIVE Telegram updates, only send one message).
-  - src/alerts/format.ts: formatVerdictMessage, a pure function, fully unit tested
-    without needing any credential.
-  - src/watch/watch.ts: findNewLaunchesSince (polls the factory for new
-    TokenLaunched events since a given block) and watchLaunches (the poll loop:
-    calls onLaunch per new token, catches and reports errors per-launch via
-    onError instead of letting one bad launch kill an hours-long process).
-  - `warden watch` wires it together: poll -> scanLaunch -> judgeLaunch(scan, null)
-    -> saveVerdictLog -> sendTelegramAlert. `warden watch --once <token>` runs the
-    same pipeline against one already-known launch immediately - this is the "test
-    feed" feature_list.json's steps call for, so `watch` doesn't require waiting on
-    a real new launch to test the wiring.
+- On-chain reader [0], repo fingerprint [1] — unchanged, still the only two
+  passes:true entries. Judge [2], alerts/watch [3] — unchanged, still blocked
+  on ANTHROPIC_API_KEY / TELEGRAM_BOT_TOKEN+CHAT_ID respectively.
+- Dry-run/--live execution gate [feature_list.json index: 4] — IMPLEMENTED,
+  passes:false BY DESIGN, not by gap. This is the one feature in this project
+  that can move real money, and it got more scrutiny than anything before it,
+  not less - see "What is NOT done, on purpose" below before assuming this
+  needs "finishing."
 
-  **Two real bugs found live, both fixed, both worth internalizing:**
+  New modules:
+  - src/execute/quote.ts: estimateTokensOut / applySlippageFloor, replicating
+    PonsV2BondingCurve.buy()'s EXACT arithmetic (fee+tax deducted from
+    quoteIn first, THEN the remainder priced through the constant-product
+    formula with feeBps=0 - read from the real buy() body, not guessed).
+    Cross-checked live against a real curve's own simulateContract result:
+    0 basis points of difference, bit-for-bit identical.
+  - src/execute/buy.ts: createWardenWallet (reads WALLET_PRIVATE_KEY, fails
+    clearly without it), simulateBuy (a real eth_call against live state -
+    proves a transaction WOULD be accepted, spends nothing, needs no funded
+    key), executeBuy (the actual broadcast path - written, never called by
+    this project).
+  - src/execute/decide.ts: decideTrade, the safety gate itself. Order of
+    checks: verdict must be low_risk AND confidence >= --min-confidence,
+    THEN pairToken must be native ETH (zero address), THEN --live must be
+    set, THEN (only then) it builds a plan and calls executeBuy. Every path
+    returns a TradeDecision, none of them throw past this function.
+  - src/execute/tradelog.ts: logTradeDecision, appends one JSON line per
+    decision to verdicts/trades.jsonl - attempted AND skipped decisions both,
+    since "why didn't it buy X" needs the same record as "why did it."
+  - `warden watch` gained --live, --min-confidence (default 0.8),
+    --buy-amount-eth (default 0.01), --slippage-bps (default 300).
 
-  1. **CLI arg-parsing bug.** `if (opts.once)` treats a falsy-but-provided value
-     (an empty string) the same as "flag not given," so `watch --once ""` silently
-     fell into the infinite poll loop instead of failing validation. Caught by
-     accident: a curl call to find a fresh test token failed, fed an empty string
-     through as `--once ""`, and the process had to be killed by hand rather than
-     exiting on its own with a clear error - it looked like a hang, and for a few
-     minutes genuinely was mistaken for one, before checking the actual output
-     revealed it had been happily polling the whole time. Fixed to
-     `opts.once !== undefined`. Now has a real regression test (src/cli.test.ts)
-     that spawns the actual CLI as a subprocess with `--once ""` and asserts it
-     exits 1 immediately rather than logging "watching for new launches."
-     Lesson: `if (someOptionalString)` is almost never what you mean for a CLI
-     flag - it conflates "not given" with "given an empty/falsy value," and the
-     two should almost always be handled differently.
+  **Two real findings from testing this feature, before anything shipped:**
 
-  2. **Confirmed, not just predicted: the public RPC rate-limits under sustained
-     watch polling.** The same accidental long-running test (before it was killed)
-     logged several clean "ANTHROPIC_API_KEY is not set" errors as real launches
-     came in - proving the per-launch error isolation works exactly as designed -
-     and THEN started logging "429 Too Many Requests" from
-     rpc.mainnet.chain.robinhood.com on both eth_call and eth_blockNumber, even
-     with the existing retry/backoff (3 retries, exponential) in scanLaunch. This
-     was flagged as a predicted risk in session 3's notes ("the future watch
-     feature will hit this harder") - now it's not a prediction, it's a reproduced
-     fact. Response so far: bumped the default --poll-interval-ms from 15000 to
-     30000 (cuts request volume, doesn't eliminate the ceiling), and documented in
-     the README that real sustained use needs a paid RPC provider (Alchemy/
-     QuickNode - the protocol's own docs recommend this for production regardless
-     of warden). Did NOT attempt a deeper fix (a request queue/throttle across
-     concurrent launch processing, or raising retry limits further) - diminishing
-     returns against a free-tier rate limit that a paid RPC solves directly.
+  1. **A real gap this project didn't know it had, caught by a live
+     simulation, not by reasoning about it in advance.** The very first
+     `simulateBuy` attempt against a real launch reverted with a custom
+     error `0xe0aeda7d`. Decoded it by computing selectors for the known
+     custom-error list (via viem's toFunctionSelector) rather than guessing:
+     `UnexpectedNativeValue()`. Turned out that launch's `pairToken` (a
+     field `getLaunchedToken` already returned, that nothing in this
+     project had ever read or exposed) was a real ERC20, not the zero
+     address - the curve wanted a transferFrom, not msg.value. Checked a
+     sample of 10 recent launches: 3 of 10 were ERC20-paired. Added
+     `pairToken` to LaunchScan (a real, if small, retroactive fix to
+     feature [0]'s output shape) and an explicit gate refusing the ERC20
+     case in decideTrade, with its own reason string and its own test.
+     Re-ran the same simulation against a confirmed native-ETH launch
+     instead: succeeded, and its output matched this project's own
+     estimateTokensOut exactly.
+     Lesson: the field you didn't bother to expose because you didn't
+     think you needed it is exactly the one an adversarial test (or in
+     this case, an honest live simulation) finds first.
 
-  15/15 tests passing (3 chain + 2 fingerprint + 2 retry + 2 judge + 1 format +
-  1 telegram + 3 watch + 1 cli regression). deno.json's test task now needs
-  --allow-write (saveVerdictLog test) and --allow-run (the subprocess-spawning
-  regression test) in addition to the existing --allow-net --allow-env --allow-read.
+  2. Math correctness was verified empirically, not just derived - the plan
+     was always to cross-check estimateTokensOut against a live
+     simulateContract call rather than trust a from-source derivation on
+     its own, and it's now a locked-in regression test (src/execute/
+     quote.test.ts's last case) using the exact real numbers from that
+     live check, not synthetic ones.
+
+  **What is NOT done, on purpose, and should not be treated as a gap to
+  close by a future session without new information changing the calculus:**
+  - No real transaction has ever been broadcast. No wallet has been funded.
+  - This wasn't skipped for lack of time - it's the position this project
+    takes on record: verifying "does executeBuy actually work" requires
+    spending real ETH on a real chain, and that's a decision for whoever
+    runs this with their own money and their own risk tolerance, not
+    something to do unilaterally to satisfy a passes:true field. A future
+    session with an actual funded testnet-equivalent setup and explicit
+    user sign-off could responsibly extend verification here; a future
+    session should NOT quietly decide the bar has lowered and self-fund a
+    test to close this out.
+
+  30/30 tests passing (3 chain + 2 fingerprint + 2 retry + 2 judge + 1
+  format + 1 telegram + 3 watch + 1 cli regression + 7 decide + 6 quote + 2
+  buy). Every new module has live-verified coverage except the actual
+  fund-spending call, consistent with the rest of this project's testing
+  discipline: real chain state wherever verifiable, mocked only at the one
+  boundary (a signed broadcast) that can't be safely exercised for real.
 
 ## What's in progress
 (none)
 
 ## What's next (recommended)
-- Dry-run/--live execution gate [feature_list.json index: 4] is next in priority
-  order. This is the one that touches a real wallet private key and can submit a
-  real transaction with real money - treat it with more care than anything built
-  so far, not less, even though the mechanics (an if-statement gating a
-  sendTransaction call) are simple. Concretely:
-  - Keep dry-run as the hard default; --live must be an explicit, unambiguous flag.
-  - Do NOT test this by actually funding a wallet and submitting a real mainnet
-    transaction. Verify the GATE (no tx without --live, no tx below
-    --min-confidence, every attempted trade logged with the verdict that
-    triggered it) with a wallet that has zero balance or on a path that never
-    reaches the actual broadcast call - the point is to prove the safety logic is
-    airtight, not to prove the trade itself works.
-  - This project has caught real bugs by testing against live state every single
-    feature so far (session 3's audit, session 4's contractAddress split, this
-    session's two bugs) - the temptation to relax that discipline "just this once"
-    because real execution is harder to safely test is exactly backwards; if
-    anything this feature deserves MORE scrutiny before passes:true, not a pass on
-    reduced verification because live-testing it responsibly is harder.
-- To unblock judge/watch for real: add ANTHROPIC_API_KEY (and, for watch,
-  TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID from @BotFather) to .env, then re-run and
-  read the actual output before flipping either to true.
+- Multi-launchpad support [feature_list.json index: 5] or backtest mode
+  [index: 6] are the two remaining, in either order - neither is blocked on
+  a missing credential the way judge/watch/execute are, so either is
+  actually completable to passes:true in this environment, unlike the last
+  three sessions' work.
+- Backtest [6] needs judge to actually run for "replays real historical
+  launches through the same scan+vet+judge pipeline" to mean anything -
+  it's arguably blocked transitively on ANTHROPIC_API_KEY too. Multi-
+  launchpad [5] has no such dependency: it needs research into a second
+  bonding-curve launchpad (pump.fun on Solana is a different chain
+  entirely and a bigger lift; check for another EVM bonding-curve
+  launchpad first) and an adapter interface matching src/chain/pons.ts's
+  shape. Probably the more tractable next step of the two.
+- To unblock judge/watch/execute for real verification: ANTHROPIC_API_KEY,
+  TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID, and (only if a human decides to
+  actually verify real execution, deliberately, with funds they choose to
+  risk) WALLET_PRIVATE_KEY on a funded wallet.
 
 ## Notes for the next session
-Runtime is Deno. Commands so far: scan, vet-repo, judge, watch (--once or polling).
-New dirs this session: src/alerts/, src/watch/, plus src/cli.test.ts at the root of
-src/ (a CLI-level regression test, not tied to one module).
+Runtime is Deno. Commands: scan, vet-repo, judge, watch (--once / polling /
+--live). New this session: src/execute/{quote,buy,decide,tradelog}.ts and
+their tests. LaunchScan gained a `pairToken` field - if you're reading an
+older LaunchScan value cached somewhere, it won't have this field.
 
-Everything from sessions 3-5's notes still holds (chain addresses, snipe-tax
+Everything from sessions 3-6's notes still holds (chain addresses, snipe-tax
 bytecode-vs-repo discrepancy, holder-concentration fix, GitHub star-timing
-restriction, judge's unverified-model-call status) - not repeated here.
+restriction, judge/watch's unverified-live-call status, the two watch bugs) -
+not repeated here.
 
-Do not commit a real .env. Same standing rule, now covering four credentials
-instead of one: RPC_URL (optional, has a public default), GITHUB_TOKEN (optional,
-degrades to a lower rate limit), ANTHROPIC_API_KEY (required for judge/watch),
-TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (required for watch's actual alert delivery).
+Do not commit a real .env. Five credentials now: RPC_URL (optional),
+GITHUB_TOKEN (optional), ANTHROPIC_API_KEY (required for judge/watch),
+TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (required for watch's alerts),
+WALLET_PRIVATE_KEY (required only for --live, and this project has never
+set one itself - if you ever do, on a testnet or with funds you've chosen
+to risk, treat it with the same care the rest of this file has tried to
+model for every other credential, and then some).

@@ -41,6 +41,12 @@ export type LaunchScan =
     curve: Address;
     deployer: Address;
     creatorFeeRecipient: Address;
+    // The zero address means the curve is quoted in native ETH (buy() takes
+    // msg.value). Anything else means it's quoted in that ERC20 instead -
+    // this was missed entirely until a live buy-simulation reverted with
+    // UnexpectedNativeValue() on a real launch paired with an ERC20, not
+    // ETH. src/execute/ only implements the native path; see its own notes.
+    pairToken: Address;
     graduationThreshold: bigint;
     creatorTaxBpsAtLaunch: number;
     phase: number;
@@ -86,8 +92,14 @@ export async function scanLaunch(
     return { token, exists: false };
   }
 
-  const { curve, deployer, creatorFeeRecipient, graduationThreshold, phase } =
-    launched;
+  const {
+    curve,
+    deployer,
+    creatorFeeRecipient,
+    pairToken,
+    graduationThreshold,
+    phase,
+  } = launched;
   const curveContract = { address: curve, abi: ponsV2CurveAbi } as const;
   const tokenContract = { address: token, abi: erc20MinimalAbi } as const;
 
@@ -154,6 +166,7 @@ export async function scanLaunch(
     curve,
     deployer,
     creatorFeeRecipient,
+    pairToken,
     graduationThreshold,
     creatorTaxBpsAtLaunch: launched.creatorTaxBps,
     phase,
