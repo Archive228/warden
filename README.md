@@ -7,17 +7,17 @@ repo for authenticity red flags (account-age-vs-activity mismatch, fork/star
 bursts, a self-promoted ticker sitting in the README or the author's bio). An
 agent reasons over both and writes a plain-language verdict, not just a score.
 
-**Status: 1 of 7 features working end-to-end**, independently audited (a fresh
-review re-verified every claim from scratch rather than trusting this repo's
-own docs — see `claude-progress.txt` for what it found, including one
-correction to a claim this README used to make). `warden scan <token>` reads
-a real Pons v2 launch live — curve progress, LP-lock, holder concentration,
-dev-buy history, mint/blacklist facts, snipe-tax bps. Everything past that
-(repo fingerprinting, the agent verdict, alerts, execution) is still unbuilt.
-See [`feature_list.json`](feature_list.json) for the full list, and
-`claude-progress.txt` before touching the repo-fingerprint feature — a July
-2026 GitHub API change breaks star-timing checks in a way that fails silently
-rather than erroring.
+**Status: 2 of 7 features working end-to-end**, the first one independently
+audited (a fresh review re-verified every claim from scratch rather than
+trusting this repo's own docs — see `claude-progress.txt` for what it found,
+including one correction to a claim this README used to make).
+`warden scan <token>` reads a real Pons v2 launch live — curve progress,
+LP-lock, holder concentration, dev-buy history, mint/blacklist facts,
+snipe-tax bps. `warden vet-repo <owner>/<repo>` fingerprints a GitHub repo for
+the exact red-flag pattern that inspired this project (see "Why") — verified
+against that real repo as ground truth, not just synthetic examples (see
+`claude-progress.txt`). The agent verdict, alerts, and execution are still
+unbuilt — see [`feature_list.json`](feature_list.json) for the full list.
 
 ## Why
 
@@ -58,8 +58,13 @@ Requires [Deno](https://deno.com) 2.x — no Node/npm needed.
 ```sh
 ./init.sh
 deno task start scan <token-address>
+deno task start vet-repo <owner>/<repo>
 deno task test
 ```
+
+`vet-repo` works unauthenticated but at GitHub's much lower rate limit (and
+some endpoints 403 outright without one, reproduced live against
+`ponsdotdev`) — set `GITHUB_TOKEN` in `.env` for real use.
 
 ## Built on
 
@@ -92,6 +97,17 @@ Agent reasoning (not built yet) will use the Claude API.
   measurably overstated concentration — an audit caught a ~3 percentage
   point error on a real token). `sampledHolders` / `hasMoreHolders` still
   tell you whether Blockscout's holder list was fully fetched.
+- **Star-burst timing isn't checked, on purpose.** GitHub restricted
+  stargazer-listing to admins/collaborators around July 2026: REST 404s for
+  a third-party repo, and GraphQL silently returns an empty list rather than
+  an error even when the repo has real stars. `vet-repo` reports
+  `starTimingAvailable: false` explicitly rather than ever treating an empty
+  result as "no burst found." Fork timing (unaffected) carries this signal
+  instead.
+- **"First activity" is a proxy, not a direct measurement.** `vet-repo` uses
+  the account's oldest *currently visible* repo as a stand-in for when it
+  first became active — cheap to compute, but wrong if the account's real
+  first activity was on a repo since deleted or made private.
 - **Whitelist-gated protocol.** Pons v2 launch creation is currently
   whitelist-only and the protocol is explicitly unaudited per its own docs.
   Real launches are happening despite the gating (this is not a theoretical

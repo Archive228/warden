@@ -4,6 +4,7 @@ import { isAddress } from "viem";
 import { createRobinhoodClient } from "./chain/client.ts";
 import { fetchHolderConcentration } from "./chain/holders.ts";
 import { scanLaunch } from "./chain/pons.ts";
+import { vetRepo } from "./repo/fingerprint.ts";
 
 const program = new Command();
 
@@ -54,6 +55,29 @@ program
     } catch (err) {
       console.error(
         `scan failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      Deno.exit(1);
+    }
+  });
+
+program
+  .command("vet-repo <owner/repo>")
+  .description(
+    "Fingerprint a GitHub repo for authenticity red flags: dormant-account reactivation, fork bursts, self-promoted tokens",
+  )
+  .action(async (ownerRepo: string) => {
+    const [owner, repo] = ownerRepo.split("/");
+    if (!owner || !repo || ownerRepo.split("/").length !== 2) {
+      console.error(`expected owner/repo, got: ${ownerRepo}`);
+      Deno.exit(1);
+    }
+
+    try {
+      const fingerprint = await vetRepo(owner, repo);
+      console.log(JSON.stringify(fingerprint, null, 2));
+    } catch (err) {
+      console.error(
+        `vet-repo failed: ${err instanceof Error ? err.message : String(err)}`,
       );
       Deno.exit(1);
     }

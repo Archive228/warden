@@ -1,149 +1,83 @@
 # Project: warden — agentic launch-vetting tool
-# Last updated: 2026-09-05 by session 3 (independent audit + fixes)
+# Last updated: 2026-09-06 by session 4 (repo-authenticity fingerprint)
 
 ## What's done
-- On-chain Pons v2 reader [feature_list.json index: 0] — still passes:true, now with
-  higher confidence after a fresh, independent audit (a separate session with no
-  memory of building this, told explicitly not to trust this repo's own docs) cloned
-  the repo cold and re-verified every claim from scratch. Full audit method and
-  findings are worth reading in the session transcript, not reproduced in full here;
-  the load-bearing points are captured below because they change what future
-  sessions should assume is true.
+- On-chain Pons v2 reader [feature_list.json index: 0] — unchanged this session.
+- Repo/social authenticity fingerprint [feature_list.json index: 1] — passes:true,
+  verified against real ground truth, not synthetic examples. `warden vet-repo
+  <owner>/<repo>` reports: account-created-at vs the account's oldest visible repo
+  (dormancyGapDays), fork creation timestamps and the largest cluster within a
+  30-minute sliding window, star COUNT only (timing deliberately unavailable, see
+  below), and text-mention scanning of the README + owner bio split into two
+  separately-reported buckets: contractAddressMentions (raw 0x... matches — weak
+  signal alone) and tickerMentions ($XXXX-style — much sharper signal).
 
-  **Corrected: the "snipe-tax function doesn't exist" claim was wrong.** Session 2
-  read PonsV2BondingCurve.sol (777 lines) end to end, found zero mentions of "snipe",
-  and concluded the factory calls a function absent from the curve. The audit didn't
-  stop at the source repo — it did raw eth_call probes with real selectors against 3
-  live curves, with a negative control confirming the contract actually reverts
-  cleanly on an unknown selector (so this isn't a proxy silently swallowing bad
-  calls). Result: currentSnipeTaxBps(address) resolves without reverting on all 3
-  curves (returns 0 on all of them — every curve checked was at least a couple
-  minutes old, past the ~15s decay window, so 0 is consistent with "already decayed"
-  but not proven to be the only reason), and exemptFromSnipeTax(address) reverts with
-  a real NotFactory() custom error rather than an unknown-selector revert — meaning
-  the function exists and is access-gated, not missing. Conclusion: the DEPLOYED
-  bytecode has these functions even though ponsdotdev/ponsfamily's current public
-  HEAD doesn't. Lesson for this codebase and beyond: a "full read of the source
-  repo" is not equivalent to checking the actual deployed contract — the two can
-  and did diverge here. currentSnipeTaxBps is now implemented in scanLaunch
-  (src/chain/pons.ts:fetchSnipeTaxBps), called defensively (try/catch -> null on
-  failure) since the discrepancy itself is still unexplained.
+  Verified two ways, both against real repos, not mocks:
+  1. Positive control: github.com/Phosphenq/bodkin — the exact repo this whole
+     project's "Why" is about. Ran `vet-repo` against it live and got
+     dormancyGapDays=2487 (matches the known ~6.8-year-old dormant account),
+     forkBurst={count:6, windowMinutes:30, first/last exactly 19m7s apart} (matches
+     the originally-researched "6 forks in a 19-minute window" finding to the
+     second), tickerMentions=[$BODKIN in readme, $BODKIN in bio] (matches). The tool
+     independently reproduces, from scratch, a red-flag profile that previously took
+     a full research pass to find by hand.
+  2. Negative control: github.com/ponsdotdev/ponsfamily (the real, legitimate Pons
+     contracts repo). This is what caught a real design flaw before it shipped: its
+     README legitimately mentions 4 contract addresses (V1/V2 factory addresses,
+     real technical documentation) — a naive single "token mention" signal would
+     have flagged this as shilling. Splitting into contractAddressMentions (weak,
+     common in any protocol-integration repo) vs tickerMentions (strong, near-zero
+     false-positive rate expected) fixed it: ponsfamily shows 4 contract-address
+     mentions and 0 ticker mentions, correctly not flagged.
 
-  **Real bug fixed: holder concentration denominator.** src/chain/holders.ts was
-  dividing the top holder's balance by the SUM OF THE FETCHED PAGE, not by the
-  token's real totalSupply (which scanLaunch already fetches separately and simply
-  wasn't passed through). Audit measured this overstating concentration by ~3
-  percentage points on a real token. Fixed: fetchHolderConcentration now takes
-  totalSupply as a parameter and divides by that; added hasMoreHolders (from
-  Blockscout's next_page_params) so callers can tell when the page was incomplete
-  without that affecting the share calculation itself.
-
-  **Real bug fixed: no error handling on any network call.** Audit reproduced a live
-  crash — a handful of sequential `scan` calls hit a 429 from the public RPC and the
-  CLI died with a raw unhandled stack trace. Added src/util/retry.ts (generic
-  retry-with-exponential-backoff, 3 retries default) wrapping both RPC calls in
-  scanLaunch; wrapped the whole CLI action in try/catch printing a one-line error and
-  exiting 1 instead of a raw trace (verified live: pointed RPC_URL at a dead endpoint,
-  got a clean caught error + exit code 1, not a crash). fetchDevBuys and
-  fetchHolderConcentration each independently catch their own failures and degrade to
-  an explicit "unavailable" value rather than either crashing or silently returning a
-  fake zero that would look identical to a genuine clean result — this distinction
-  (DevBuy is now `{available:true,...} | {available:false,reason}` instead of a bare
-  object) matters more than it looks: a bare 0 on failure is indistinguishable from a
-  verified zero, which is exactly the kind of silent-wrong-answer this whole project
-  exists to catch in *other* people's tools.
-
-  **Fixed, lower-severity:** RPC_URL in .env.example was never actually read
-  (createRobinhoodClient() was called with no argument) — now read via
-  Deno.env.get("RPC_URL") in cli.ts. init.sh's exit message said "No features are
-  wired up yet," stale since session 2. Removed node-telegram-bot-api from deno.json
-  — it was pinned for a feature that doesn't exist yet (Telegram alerts), audit found
-  it pulls the deprecated `request` package plus ~90 transitive deps with CVE
-  history in tough-cookie/uuid, all dead weight for code that isn't written. Added
-  automated tests for the retry utility (src/util/retry.test.ts) — total 5 tests, all
-  still pass against live RPC.
-
-  **Deliberately NOT changed:** @anthropic-ai/sdk stays in deno.json unused, same as
-  before — no equivalent problem was found with it (no deprecated/flagged transitive
-  deps), and it maps directly to the next planned feature, unlike telegram which was
-  further out. Not purging every unused dep reflexively, only the one with an
-  evidenced problem.
-
-  Re-verified end to end after all fixes: 5/5 tests pass against live RPC, scan
-  tested against multiple fresh live launches found independently (not the same
-  address reused every time), RPC_URL override confirmed working, clean-error-on-
-  network-failure confirmed working.
+  Both are now automated tests (src/repo/fingerprint.test.ts) that skip cleanly
+  (Deno.test ignore) rather than failing confusingly when GITHUB_TOKEN isn't set —
+  unauthenticated GitHub API calls hit a much lower rate limit and 403'd outright on
+  one endpoint during this session's testing (reproduced live: unauthenticated
+  GET /users/ponsdotdev -> 403; same call with a token -> 200). Total test count
+  now 7/7 passing (3 chain + 2 fingerprint + 2 retry), all against live services,
+  no mocks anywhere in this codebase so far.
 
 ## What's in progress
 (none)
 
 ## What's next (recommended)
-- Repo/social authenticity fingerprint [feature_list.json index: 1]
-  Reason: unchanged from session 2 — still the most foundational next signal.
-  GOTCHA (from session 2's research, still valid, re-confirm before relying on it if
-  much time has passed): GitHub restricted the stargazers-listing endpoint to
-  admin/collaborators as of ~July 2026. REST /repos/{o}/{r}/stargazers 404s for any
-  third-party repo. GraphQL `stargazers { edges { starredAt } }` does NOT error on a
-  third-party repo — it silently returns an EMPTY edges array even when
-  stargazerCount confirms real stars exist. Handle this explicitly (report "star
-  timing unavailable"), never treat empty as a genuine zero-stars signal — this is
-  the exact class of mistake this session just fixed in devBuy/holders, applied
-  in advance rather than after the fact this time. Fork timing (created_at per fork
-  via REST) is NOT restricted, still works.
+- Agent-judge [feature_list.json index: 2]
+  Reason: both inputs it needs (on-chain scan, repo fingerprint) now exist and are
+  verified. This is the first feature that actually calls an LLM (the Claude API,
+  @anthropic-ai/sdk — already in deno.json, unused until now, check its pinned
+  version ^0.32.0 against current before writing code against it, session 2's
+  research found it already 3 minor versions stale as of 2026-09-05).
+  Design note carried forward from the architecture doc: the judge should write a
+  plain-language verdict + reasoning log citing the SPECIFIC signals it weighed
+  (feature_list.json's own acceptance criteria), not just a score — this is the
+  account's own "receipts over claims" standard applied to warden's own output, not
+  just the launches it evaluates.
 
 ## Notes for the next session
-Runtime is Deno (no Node/npm on this machine). `deno task start scan <address>`,
-`deno task test`. deno.lock pins resolved versions (regenerated this session after
-removing node-telegram-bot-api — if you add a new import, run `deno install` again
-before committing so the lockfile stays in sync).
+Runtime is Deno. `deno task start scan <address>`, `deno task start vet-repo
+<owner>/<repo>`, `deno task test`. Tests that hit the GitHub API need
+GITHUB_TOKEN in the environment or they skip (not fail) — `gh auth token` works
+fine as a source if `gh` is authenticated on the machine, same as this session did.
 
-Big-picture lesson from this session, worth carrying into every future one: session
-2 did real, careful, live verification (Blockscout API calls, a real eth_getLogs
-probe, a real end-to-end scan against a live launch) and was still meaningfully
-wrong about one central claim, because it verified against the *public source repo*
-and treated that as equivalent to verifying the *deployed contract*. Those came apart
-here. When the two could diverge (anything where "the docs/repo say X" is doing load-
-bearing work), prefer a live call against the actual deployed address over reading
-someone else's source tree, even a repo that's demonstrably the right one.
+Two src/repo/ files exist now: github.ts (thin authenticated-fetch wrapper,
+falls back to unauthenticated if GITHUB_TOKEN unset) and fingerprint.ts (the
+actual vetRepo logic). Both are new surface area for the next session to be aware
+of alongside src/chain/.
 
-Verified Pons v2 / Robinhood Chain facts, still holding as of this session's
-re-verification (2026-09-05):
-- Robinhood Chain id 4663, RPC https://rpc.mainnet.chain.robinhood.com. Public RPC
-  is rate-limited (confirmed by reproducing a real 429 this session) — fine for
-  `scan`'s occasional use now that retry/backoff exists, but the future `watch`
-  feature (continuous polling) will hit this harder and may need a paid RPC provider
-  or a longer backoff ceiling than the 3-retry default here.
-- Pons V2 factory 0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e and launch locker
-  0x267444D099b10fB5Ed7c3Cc7B7c767AdcA574952 — both re-confirmed verified on
-  Blockscout this session, ABI fragments in src/chain/abi/ match live. Do NOT
-  confuse with the V1 factory (0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB).
-- robinhoodchain.blockscout.com needs a normal browser User-Agent (Cloudflare blocks
-  bare curl) — but is itself somewhat flaky even with the right UA (audit hit
-  transient empty/500 responses more than once this session). fetchHolderConcentration
-  already treats any fetch/parse failure as "return null," not a crash — keep that
-  pattern for anything else that calls this host.
-- fetchDevBuys still queries fromBlock: 0n with no upper bound on range width. Not
-  observed to actually break on any real curve yet (they're all young relative to
-  the ~10k-log limit that broke a query against the much busier factory contract
-  earlier), but it's unbounded by construction — now fails gracefully instead of
-  crashing (see DevBuy's available:false case) rather than being fully fixed. Proper
-  fix needs the curve's actual deployment block (e.g., from the TokenLaunched log)
-  to bound the range; not done, low urgency until a curve is old/busy enough to
-  actually hit it.
-- V2 launch creation is whitelist-gated and the protocol is explicitly unaudited,
-  but real launches keep happening (this session independently found and scanned
-  several more beyond session 2's one example) — still no shortage of live data.
+Standing lesson from session 3, reapplied successfully this session: don't ship a
+single blended "risk signal" out of two things with very different reliability —
+splitting contractAddressMentions from tickerMentions here is the direct
+application of the same principle as splitting DevBuy into
+available:true/false instead of a bare number that could silently mean either
+"zero" or "couldn't check." Look for this pattern before merging any two facts
+into one field for the rest of this project.
 
-Dependency versions still worth a deliberate look when the relevant feature gets
-built: @anthropic-ai/sdk pinned at ^0.32.0 vs. current ~0.124.0 as of session 2's
-research — check again before implementing the agent-judge feature, don't assume
-that research is still current by then.
+Everything from session 3's notes about the on-chain side still holds (Robinhood
+Chain id 4663, Pons v2 factory/locker addresses, the snipe-tax bytecode-vs-public-
+repo discrepancy, holder-concentration denominator fix, retry/backoff wrapping) —
+not repeated here, read the git log (session 3's commit message has the full
+rationale) rather than trusting this file alone if it's been a while.
 
-Still true: this is an independently-derived implementation, not a copy of
-github.com/Phosphenq/bodkin. This session's audit went further than "never read it"
-and actually cloned bodkin to diff the approach: bodkin's own code calls
-currentSnipeTaxBps too, but wraps it in `.catch(() => 0n)` — silently defaulting to
-"0% tax" on ANY failure, indistinguishable from a genuine 0. warden's snipeTaxBps
-is `bigint | null` specifically so a failed read can never be confused with a
-verified zero. Do not commit a real .env — confirmed clean across full git history
-this session, not just the current tree.
+Do not commit a real .env. GITHUB_TOKEN, same as the wallet key, only ever read
+from environment at runtime.
