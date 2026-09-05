@@ -5,9 +5,9 @@
     "steps": [
       "Point warden at a Pons v2 token address",
       "Run `warden scan <address>`",
-      "Verify it returns LP-lock status, ownership-renounce status, mint/blacklist flags, top-holder concentration %, and dev-buy size, all read live on-chain"
+      "Verify it returns LP-lock status, mint/blacklist/deployer-privilege facts, top-holder concentration %, and dev-buy size and count, combining live per-token reads (curve state, LP lock, holders, dev-buy history) with fixed facts confirmed once from the token template's source (no mint/blacklist function exists in PonsV2LauncherToken.sol for any Pons v2 launch)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "functional",

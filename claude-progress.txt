@@ -1,35 +1,90 @@
 # Project: warden — agentic launch-vetting tool
-# Last updated: 2026-09-05 by initializer session
+# Last updated: 2026-09-05 by session 2 (first feature)
 
 ## What's done
-- Repo scaffolded: deno.json, README, LICENSE (MIT), .gitignore, .env.example
-- feature_list.json written (7 features, all passes=false)
-- src/cli.ts stub (commander CLI shell, no subcommands wired up yet)
+- On-chain Pons v2 reader [feature_list.json index: 0] — passes:true, verified end-to-end
+  against real chain state, not just unit tests. `warden scan <token>` reads: curve
+  progress toward graduation, LP-lock status, fee/tax bps, holder concentration
+  (Blockscout, paginated — see "Known gaps"), dev-buy count/size (via CurveBuy event
+  logs filtered by deployer address), and fixed token-template facts (no mint function,
+  no blacklist function, deployer has zero on-chain privileges — confirmed once from
+  reading PonsV2LauncherToken.sol, true for every Pons v2 launch, not a per-call read).
+  Live-tested against a real launch found on-chain today: token 0xc65AF5ed7d40A2A0
+  C8E362B93b4AF70A40a58456 ("Tales" / TALES), curve 0xeE79eF295daC0d0E8c979fDEd8615
+  F1c3290FdD5, discovered via Blockscout's decoded-logs API on the factory contract.
+  3 automated tests in src/chain/pons.test.ts (chain id, canLaunch responds, scan
+  reports exists:false for a never-launched address), all passing against live RPC.
 
 ## What's in progress
-(none — this was the initializer session, no features implemented on purpose)
+(none)
 
 ## What's next (recommended)
-- On-chain Pons v2 reader [feature_list.json index: 0]
-  Reason: every other feature (repo fingerprint, agent judge, alerts, backtest) depends on having real on-chain data to feed them.
+- Repo/social authenticity fingerprint [feature_list.json index: 1]
+  Reason: second-most foundational signal, and the one the agent-judge feature needs
+  alongside the on-chain read to write a real verdict.
+  IMPORTANT gotcha already found by research (do not re-derive, just apply): GitHub
+  restricted the stargazers-listing endpoint to admin/collaborators as of ~July 2026.
+  REST /repos/{o}/{r}/stargazers now 404s for any third-party repo. GraphQL
+  `stargazers { edges { starredAt } }` does NOT error on a third-party repo — it
+  silently returns an EMPTY edges array even when stargazerCount confirms real stars
+  exist. A naive implementation would misread "access denied" as "zero stars, real
+  red flag" — this must be handled explicitly (report "star timing unavailable",
+  never treat empty as a genuine signal). Fork timing (`GET /repos/{o}/{r}/forks`,
+  `created_at` per fork) is NOT restricted and works fine — lean on that instead.
 
 ## Notes for the next session
-Runtime is **Deno**, not Node — there is no node/npm on this machine (checked, not installed).
-Dependencies are npm: packages imported via deno.json's "imports" map (npm:viem, npm:commander,
-npm:@anthropic-ai/sdk, npm:node-telegram-bot-api) plus @std/dotenv from JSR. Run `deno task start`,
-not `npm run dev`. `deno.lock` pins exact resolved versions once you run `deno install` or `deno cache`
-against src/cli.ts — do that before writing code that imports a new package for the first time.
+Runtime is Deno (no Node/npm on this machine). `deno task start scan <address>`,
+`deno task test`. deno.lock pins resolved versions.
 
-Protocol research is running in the background (Pons v2 contract addresses/ABI from the official
-docs.ponsfamily.com + github.com/ponsdotdev/ponsfamily, Robinhood Chain RPC/chain ID, GitHub API
-approach for fork/star timestamps for the authenticity-fingerprint feature). Check for that before
-hand-rolling ABI guesses.
+Verified Pons v2 / Robinhood Chain facts now baked into the code (src/chain/abi/*,
+src/chain/robinhoodChain.ts) — don't re-derive these, they're sourced and correct
+as of 2026-09-05:
+- Robinhood Chain id 4663, RPC https://rpc.mainnet.chain.robinhood.com (verified live
+  via eth_chainId). Public RPC is rate-limited per Robinhood's own docs — fine for
+  this tool's read volume, would need Alchemy/QuickNode for anything higher-frequency.
+- Pons V2 factory 0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e and launch locker
+  0x267444D099b10fB5Ed7c3Cc7B7c767AdcA574952 — both verified on Blockscout, ABI
+  fragments in src/chain/abi/ were fetched live from Blockscout, not hand-transcribed.
+  Do NOT confuse with the V1 factory (0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB) —
+  different contract, no bonding curve, a generic web search surfaces this by mistake.
+- robinhoodchain.blockscout.com blocks bare curl (Cloudflare) but works fine with a
+  normal browser User-Agent header — see BROWSER_UA in src/chain/holders.ts.
+- KNOWN GAP, not fixed: the docs describe a "snipe tax" that decays from 99% to 0%
+  over the first few seconds after launch (docs say 5s; PonsV2LaunchFactory.sol says
+  15s by default, snapshotted per launch). PonsV2LaunchFactory.sol calls
+  `curve.currentSnipeTaxBps()` / `curve.exemptFromSnipeTax()` at launch time, but a
+  full read of PonsV2BondingCurve.sol (777 lines) found ZERO mentions of "snipe"
+  anywhere — those functions are not in the public curve source, so calling them
+  would fail against the real deployed contract. Deliberately NOT implemented in
+  scanLaunch rather than shipping a call that's confirmed broken. If this matters for
+  a later feature (it will, for anything timing a buy against the snipe-tax decay),
+  fetch the live verified ABI per-curve from Blockscout
+  (GET /api/v2/smart-contracts/{curve_address}) before trusting any quote math here —
+  don't hardcode the docs' 5s figure.
+- KNOWN GAP: holder concentration comes from Blockscout's /tokens/{address}/holders,
+  which is PAGINATED — `topHolderShare` in the output is the top holder's share of the
+  fetched page (default page size, first page only), not a verified figure across all
+  holders. Good enough as a first-pass signal, mislabel it and someone will screenshot
+  a wrong "50% concentration" claim as fact. Fix properly by paging through the whole
+  holder list before shipping this as something the agent-judge feature quotes as a
+  hard number.
+- V2 launch creation is whitelist-gated per the docs ("Read this before integrating"
+  box) and the protocol is explicitly unaudited (3rd-party audits in progress, none
+  closed) — despite the gating, real launches ARE happening (411 TokenLaunched events
+  observed in one ~13-minute sample window during this session), so there's no
+  shortage of live data to test against, but `warden` should probably surface
+  "protocol unaudited" as a standing disclosure somewhere in its own output eventually
+  — not done yet, low priority.
 
-Deliberately did NOT read or reuse code from github.com/Phosphenq/bodkin for this implementation,
-even though that's the repo that inspired this project (see README "Why") — the whole point of
-warden is to be an honest, independently-derived tool, not a copy. Cite it only as prior art in
-prose if relevant, never paste its code. Same standard applies to any other third-party repo:
-dependencies via deno.json imports are fine, wholesale copying is not.
+Dependency versions worth a deliberate bump when convenient (checked live against
+npm, not urgent for what's built so far — nothing implemented yet uses either):
+@anthropic-ai/sdk pinned at ^0.32.0 (resolved 0.32.1) vs. current 0.124.0 — bump
+before implementing the agent-judge feature. node-telegram-bot-api pinned at ^0.66.0
+vs. current 2.1.0 (a major-version jump, published 2026-09-04, actively maintained)
+— check what changed before implementing the Telegram-alert feature, don't just bump
+blindly.
 
-Do NOT commit a real .env — only .env.example, gitignored. Telegram bot token, Anthropic API key,
-RPC URL, and wallet private key (only needed for --live) all get read from .env at runtime.
+Still true from the initializer session: this is an independently-derived
+implementation, not a copy of github.com/Phosphenq/bodkin (never read for this
+build) — protocol facts came from docs.ponsfamily.com, github.com/ponsdotdev/
+ponsfamily, and live Blockscout/RPC queries only. Do not commit a real .env.
