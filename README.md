@@ -33,10 +33,6 @@
 </p>
 
 <p align="center">
-  <img src="assets/cli.png" alt="Warden terminal — judge session" width="760" />
-</p>
-
-<p align="center">
   <sub>
     Open the same session in a browser:
     <a href="assets/terminal.html"><code>assets/terminal.html</code></a>
@@ -45,6 +41,10 @@
 </p>
 
 Most launch tools stare at the curve and call it due diligence. Warden reads the token *and* the story around it — then writes down what it actually saw, including what it could not check.
+
+<p align="center">
+  <img src="assets/cli.png" alt="Warden terminal — judge session" width="760" />
+</p>
 
 <br />
 
