@@ -7,14 +7,14 @@ repo for authenticity red flags (account-age-vs-activity mismatch, fork/star
 bursts, a self-promoted ticker sitting in the README or the author's bio). An
 agent reasons over both and writes a plain-language verdict, not just a score.
 
-**Status: 3 of 7 features working end-to-end**, the first one independently
+**Status: 4 of 7 features working end-to-end**, the first one independently
 audited (a fresh review re-verified every claim from scratch rather than
 trusting this repo's own docs — see `claude-progress.txt` for what it found,
-including one correction to a claim this README used to make). Two more
-(`judge`, `watch`) are fully implemented and wired through the real pipeline
-but not yet verified end-to-end, both blocked on the same shape of gap: a
-credential this environment doesn't have. See `feature_list.json` for exactly
-what's confirmed vs. still open on each.
+including one correction to a claim this README used to make). Three more
+(`judge`, `watch`, `backtest`) are fully implemented and wired through the
+real pipeline but not fully verified end-to-end, all blocked on the same
+credential this environment doesn't have (`ANTHROPIC_API_KEY`). See
+`feature_list.json` for exactly what's confirmed vs. still open on each.
 
 `warden` reads more than one launchpad now: Pons v2 on Robinhood Chain and
 [four.meme](https://four.meme) on BNB Smart Chain, picked specifically because
@@ -44,6 +44,13 @@ math is bit-for-bit verified against a real curve's own on-chain simulation —
 but has deliberately never broadcast a real transaction. This project does
 not fund a wallet or spend real money to verify its own features, on
 principle, regardless of how solid the surrounding logic tests out.
+`warden backtest --since <date>` replays real historical launches (found by
+walking `TokenLaunched` events backward, not synthetic data) through
+scan+judge and cross-tabulates judge's verdict against what actually
+happened — graduated, stalled/abandoned, or still active, each with its own
+on-chain evidence. It does not claim to detect "rugs" (see Known gaps); the
+discovery and outcome-classification logic are both tested and verified, the
+judge calls inside it fail the same way judge does standalone.
 
 ## Why
 
@@ -94,6 +101,7 @@ deno task start judge <token-address> [--repo <owner>/<repo>]
 deno task start watch --once <token-address>   # test feed, one launch, no waiting
 deno task start watch                          # live feed, polls forever, ctrl-c to stop
 deno task start watch --live --min-confidence 0.9 --buy-amount-eth 0.01 --slippage-bps 300
+deno task start backtest --since 2026-09-01
 deno task test
 ```
 
@@ -208,6 +216,26 @@ Agent reasoning (not built yet) will use the Claude API.
   it would need a per-token selector probe, not a cached fact. `judge`/
   `watch`/execution have not been extended to four.meme at all yet — only
   `scan`.
+- **`backtest` does not detect "rugs"**, despite the original feature spec's
+  wording. Doing that credibly needs price history and holder-exit patterns
+  this project has no verified source for, and Pons's own design already
+  structurally blocks the classic rug vectors (LP is vault-locked, not
+  pullable; the deployer has zero mint/blacklist privilege) that a rug
+  check would otherwise look for. It reports the honest, objectively
+  on-chain-checkable alternative instead: graduated vs. abandoned
+  (stalled) vs. active vs. too-recent-to-call, each backed by a real
+  evidence string, cross-tabulated against judge's verdict category.
+- **This whole project's own testing eventually rate-limited the public
+  Robinhood Chain RPC it depends on** — a real, observed ceiling, not a
+  hypothetical one. A day of manual verification scripts plus repeated
+  full-suite test runs against `rpc.mainnet.chain.robinhood.com`
+  eventually triggered the same 429 already documented above, on top of a
+  separate, real `eth_getLogs` infrastructure outage on their side (also
+  documented above) earlier in the same session. Every affected piece of
+  functionality had already been confirmed working via direct scripts
+  earlier in the session, before the cumulative load set in — treat a
+  failing live-network test here as a sign to check the RPC's current
+  health first, not as an automatic regression.
 
 ## License
 

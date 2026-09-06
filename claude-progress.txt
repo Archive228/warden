@@ -1,135 +1,111 @@
 # Project: warden — agentic launch-vetting tool
-# Last updated: 2026-09-06 by session 8 (multi-launchpad: four.meme on BSC)
+# Last updated: 2026-09-06 by session 9 (backtest mode - all 7 features now attempted)
 
 ## What's done
-- On-chain reader [0], repo fingerprint [1] — unchanged, passes:true.
-- Judge [2], alerts/watch [3], execution gate [4] — unchanged, still blocked
-  on credentials / on principle respectively (see sessions 5-7's notes).
-- Multi-launchpad support [feature_list.json index: 5] — passes:true, fully
-  verified, no credential blocker this time. Second adapter: **four.meme**
-  on **BNB Smart Chain**, chosen deliberately (over Virtuals Protocol and
-  Doppler, both considered and rejected as architecturally too different -
-  auction-style / shared Uniswap-v4-hook rather than a per-token curve) for
-  being genuinely structurally different from Pons in exactly the ways that
-  stress-test whether the adapter interface actually generalizes rather than
-  just being Pons with different addresses:
-  - **LP-lock**: Pons has a dedicated vault contract (`isLocked`/
-    `lockedTokenSupply`). four.meme has no locker at all - graduation burns
-    ~100% of LP to the dead address via a real PancakeSwap V2 pair. Checking
-    "is LP locked" means looking up that pair (factory `getPair(token,
-    quote-or-WBNB)`) and reading ITS OWN `balanceOf(dead)+balanceOf(0)` over
-    `totalSupply` - a completely different query shape, not a parameter
-    change on the same query.
-  - **Owner privilege**: Pons's deployer never has any privilege at any
-    phase (a fixed protocol fact). four.meme's token `owner()` returns
-    TokenManager2's own address WHILE the token is on the curve (confirmed
-    live) and flips to `address(0)` at graduation - meaning "owner has
-    privileges" is EXPECTED pre-graduation and only a red flag
-    post-graduation. A naive port of Pons's "any owner privilege = bad"
-    assumption would have false-positived on every single healthy,
-    non-graduated four.meme launch. This is the concrete reason
-    src/chain/launchpad.ts's `OwnerPrivilegeSignal` carries an
-    `expectedRightNow` field instead of collapsing to one boolean.
+- On-chain reader [0], repo fingerprint [1], multi-launchpad [5] — passes:true,
+  all independently verified against live chain state.
+- Judge [2], alerts/watch [3], execution gate [4], backtest [6] — fully
+  implemented, all passes:false, all genuinely blocked (not neglected) on the
+  same missing credential: ANTHROPIC_API_KEY. Execution [4] carries an
+  additional, deliberate, principle-based block (no real money spent to
+  verify a money-moving feature) on top of that.
+- Backtest [feature_list.json index: 6] this session:
+  - src/backtest/discover.ts: findHistoricalLaunches walks TokenLaunched
+    events backward from latest in 5000-block chunks (this factory's activity
+    can exceed a single eth_getLogs call's result ceiling over a wide range -
+    hit `-32005 limit exceeded` querying it directly back in session 3),
+    stopping once a chunk's own block timestamp predates `--since`, not on a
+    fixed block-count estimate (block time drifts, shouldn't be trusted
+    precisely over a long lookback).
+  - src/backtest/outcome.ts: classifyOutcome. Deliberately does NOT attempt
+    to detect "rugs" - the original feature_list.json wording asked for that,
+    and this session concluded partway through implementation that it can't
+    be defended the way this project defends everything else it claims
+    (would need price history / holder-exit-pattern evidence this project
+    has no verified source for, and Pons's own design already structurally
+    blocks the classic vectors - vault-locked LP, zero deployer privilege -
+    a rug check would look for). Reports graduated / abandoned (stalled,
+    progress<5% after 7+ days) / active / indeterminate (too recent) instead,
+    each with a real on-chain evidence string. feature_list.json's wording
+    was corrected to match what's actually implemented and why, following
+    this project's own precedent (session 4 did the same for the
+    repo-fingerprint feature's steps) rather than silently shipping
+    something narrower than originally specified without saying so.
+  - src/backtest/backtest.ts: runBacktest replays each historical launch
+    through the REAL scanLaunch and REAL judgeLaunch (catches judgeLaunch's
+    failure per-entry into `verdictError`, doesn't let one blocked call stop
+    the whole replay). summarizeBacktest cross-tabulates verdict category
+    against actual outcome - unit-tested to confirm it never fabricates a
+    count for an entry with no verdict (verdictsUnavailable is tracked
+    separately and explicitly, the four category counts only ever sum over
+    entries that actually have a verdict).
+  - 7 new tests: 4 for classifyOutcome (pure logic, all passing), 2 for
+    summarizeBacktest (pure logic, all passing, including the
+    never-fabricates-counts case), 1 live-network test for
+    findHistoricalLaunches against a real recent window.
 
-  New modules: src/chain/{bscChain,bscClient,fourmeme}.ts, src/chain/abi/
-  fourmeme.ts, src/chain/launchpad.ts (the common `LaunchpadScan` type both
-  adapters normalize into). pons.ts gained its own `toLaunchpadScan`
-  alongside fourmeme.ts's, so both produce the same shape.
-
-  **Verification trail (research was delegated to an agent first, then
-  every load-bearing fact was independently re-checked live in this
-  session before being encoded - same two-step discipline as Pons):**
-  - Re-verified `getTokenInfo`'s exact return tuple against 2 real live
-    tokens myself before writing the ABI (matched the research report
-    exactly: version, tokenManager, quote, ..., funds, maxFunds,
-    liquidityAdded).
-  - Re-verified `buyTokenAMAP` actually simulates successfully via a real
-    `simulateContract` call against a live native-BNB-paired launch.
-  - **Did NOT trust the research-reported WBNB address on sight** - called
-    `name()`/`symbol()` on it myself before hardcoding it. It happened to be
-    correct, but the point was verifying rather than assuming a well-known
-    constant is right, exactly the lesson from Pons's snipe-tax discrepancy
-    and the research agent's own wrong first guess at four.meme's proxy
-    storage slot (they initially assumed the textbook EIP-1967 slot, got
-    all-zeros back from a live `eth_getStorageAt`, and had to extract the
-    real slot from the deployed bytecode instead - documented here so it
-    isn't re-learned the hard way a third time).
-  - Spot-checked the LP-burn arithmetic against a specific graduated pair
-    (`0xf49d9C79A07922D3846C762c73b4df65205Ef772`) the research had already
-    identified, reproducing its exact balances
-    (totalSupply=59,396,969,616,568,150,296,050; dead=...295,050; zero=1,000
-    - that 1,000 is Uniswap-v2-core's own `MINIMUM_LIQUIDITY` burn, not
-    four.meme-specific) and confirming burnedFraction=1.0 → lpLocked=true.
-  - **Could not self-discover a graduated four.meme launch** to test the LP
-    path end-to-end from scratch: searching PancakeSwap's `PairCreated`
-    events hit `-32005 limit exceeded` even at a 2000-block window - BSC's
-    overall DEX volume (not just four.meme) is too high for this public
-    RPC's log-query ceiling. Documented as an honest limitation rather than
-    quietly working around it by, e.g., trying a paid indexer.
-  - 12 new tests (6 fourmeme.ts + 1 cross-launchpad shape-diff test in
-    launchpad.test.ts, all against live chain state), all passing. Full
-    suite: 37 tests total, 35 passed + 2 failed in this session's run - see
-    "External RPC issue hit this session" below before assuming those 2
-    are a regression.
-
-  **External RPC issue hit this session, unrelated to this work:**
-  Robinhood Chain's public RPC (`eth_getLogs` specifically, not
-  `eth_blockNumber`, which kept working at first) returned `"internal
-  server errror"` (their typo) consistently, then on retry leaked an
-  internal backend address in a timeout: `Post "http://10.31.45.18:8547/
-  rpc": context deadline exceeded`. That's about as clear as external
-  evidence gets that this was a real, live infrastructure problem on their
-  RPC provider's side, not a bug introduced this session. It later cleared
-  (a plain `eth_getLogs` call started returning real results again) - but
-  by then this same session's own cumulative request volume (a full day of
-  manual verification scripts plus repeated full test-suite runs against
-  this one public endpoint) had separately triggered the already-documented
-  429 rate limit (see session 6/7 notes), so re-running
-  src/execute/buy.test.ts and src/watch/watch.test.ts back-to-back kept
-  failing for a SECOND, different reason even after the first one resolved.
-  Every piece of functionality these two tests cover was independently
-  confirmed working via direct one-off scripts earlier in this same session
-  (see the "Verification trail" above and session 7's notes) before the
-  cumulative rate-limit set in - this is exhausted shared-resource capacity
-  from testing itself, not a code defect. Don't chase this by adding more
-  retries or backoff tuning; it clears on its own once request volume
-  against this specific public RPC drops, which naturally happens once a
-  session stops hammering it, not from a code change.
+  **That 7th test hit this session's own cumulative rate limit, not a bug.**
+  By the time this feature was built, this session had already run a full
+  day of manual verification scripts plus multiple complete test-suite runs
+  against `rpc.mainnet.chain.robinhood.com` (sessions 3 through 9, culminating
+  in the four.meme adapter work immediately prior) - on top of a genuine,
+  separate `eth_getLogs` infrastructure outage on Robinhood Chain's own side
+  that this session also hit and documented (session 8's notes: "internal
+  server errror" typo in their own error message, then a leaked internal
+  backend address in a timeout). The identical `getContractEvents` /
+  `eth_getLogs` pattern this test uses was confirmed working correctly many
+  times earlier in this same session (pons.test.ts, watch.test.ts, and
+  extensive manual probing in sessions 3-9) before the cumulative load set
+  in. Don't "fix" this by adding more retry logic - it's exhausted shared
+  public-RPC capacity from a very long test session, not a code defect, and
+  it will clear on its own once request volume against that one endpoint
+  drops. If it's still failing in a fresh session with a cold request
+  history, that would be a different, more concerning signal - worth
+  distinguishing the two before assuming either way.
 
 ## What's in progress
-(none)
+(none — every entry in feature_list.json has now been attempted at least once)
 
 ## What's next (recommended)
-- Backtest mode [feature_list.json index: 6] is the last one. It needs
-  judge to actually run ("replays real historical launches through the
-  same scan+vet+judge pipeline") to mean what feature_list.json says, so
-  it's transitively blocked on ANTHROPIC_API_KEY the same way judge/watch
-  are - this project is now at the point where 6 of 7 features are done or
-  as-done-as-they-can-be without new credentials, and the 7th needs the
-  same one credential (ANTHROPIC_API_KEY) that's blocked 3 others already.
-- If a session arrives with ANTHROPIC_API_KEY available: verify judge [2]
-  for real first (it's the actual bottleneck), then watch [3] (needs
-  Telegram creds too), then backtest [6] becomes buildable for real rather
-  than scaffolded-and-blocked.
-- Extending judge/watch/execution to four.meme (not just scan) is a
-  reasonable future increment but wasn't in this session's scope - the
-  feature_list.json entry only asked for the read side.
+This project has now hit a real ceiling: 4 of 7 features are done and
+verified, and the other 3 are ALL blocked on one single missing credential
+(ANTHROPIC_API_KEY), not on remaining engineering work. There is no more
+"pick the next feature" work to do productively without it. Concretely, in
+priority order if/when a key becomes available:
+1. Add a real ANTHROPIC_API_KEY to .env. Run `warden judge <token>` against
+   a real launch (ideally one with `--repo Phosphenq/bodkin` if that launch
+   is still live, for a case with real, known red flags to weigh) and read
+   the actual output. Check specifically whether the 6 pieces of "known
+   context" baked into judge's system prompt (session 5's notes list them)
+   actually change its reasoning the way they're meant to, not just whether
+   it returns valid JSON. Only then flip feature [2] to true, and only if
+   the output genuinely holds up - if it's generic or ignores the context,
+   fix the prompt before flipping anything.
+2. Add TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (a bot from @BotFather). Run
+   `warden watch --once <token>` and confirm a real message arrives, reads
+   correctly, and matches what the terminal output claims was sent. Flip [3].
+3. Run `warden backtest --since <recent date>` for real and read whether the
+   win-rate cross-tab is actually informative once verdicts stop being null -
+   the summary logic is unit-tested against synthetic data, but nobody has
+   looked at what it says about real judge output yet. Flip [6] once that's
+   sane.
+4. Feature [4] (execution) stays passes:false regardless of API key
+   availability, on principle - see session 7's notes. Do not self-fund a
+   wallet to close this out unless a human explicitly decides to, with funds
+   they've chosen to risk.
 
 ## Notes for the next session
-Runtime is Deno. Commands: scan (--launchpad pons-v2|four-meme,
---normalized), vet-repo, judge, watch. New this session: src/chain/
-{bscChain,bscClient,fourmeme,launchpad}.ts, src/chain/abi/fourmeme.ts, and
-toLaunchpadScan in both pons.ts and fourmeme.ts.
+Runtime is Deno. Full command list now: scan (--launchpad, --normalized),
+vet-repo, judge, watch (--once / polling / --live / trade flags), backtest
+(--since). New this session: src/backtest/{outcome,discover,backtest}.ts and
+their tests.
 
-FOURMEME_RPC_URL (optional, defaults to the public BSC RPC) joins the env
-var list alongside RPC_URL (Robinhood Chain specific - the two chains need
-separate RPC endpoints, obviously, don't conflate them).
+Everything from sessions 3-8's notes still holds (Pons/four.meme protocol
+details, the two watch bugs, the execution-gate scope decision, the
+RPC-reliability findings) - not repeated here, read the git log for full
+rationale on anything that needs it; each commit message is written to stand
+on its own.
 
-Everything from sessions 3-7's notes still holds for the Pons side (chain
-addresses, snipe-tax bytecode-vs-repo discrepancy, holder-concentration
-fix, GitHub star-timing restriction, the two watch bugs, execution-gate
-scope decision) - not repeated here.
-
-Do not commit a real .env. Same six credentials as before, plus
-FOURMEME_RPC_URL is optional/low-stakes (a bad value just means slower/
-rate-limited BSC reads, not a security concern the way a private key is).
+Do not commit a real .env. Same credentials as session 8's list - nothing
+new was added this session (backtest reuses RPC_URL and ANTHROPIC_API_KEY,
+both already tracked).

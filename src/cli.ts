@@ -19,6 +19,7 @@ import { sendTelegramAlert } from "./alerts/telegram.ts";
 import { watchLaunches } from "./watch/watch.ts";
 import { decideTrade, type TradeOptions } from "./execute/decide.ts";
 import { logTradeDecision } from "./execute/tradelog.ts";
+import { runBacktest, summarizeBacktest } from "./backtest/backtest.ts";
 import type { Address } from "viem";
 
 const program = new Command();
@@ -308,5 +309,42 @@ program
       );
     },
   );
+
+program
+  .command("backtest")
+  .description(
+    "Replay historical Pons v2 launches through scan+judge and report how judge's verdicts lined up against what actually happened - graduated vs. stalled, not a fabricated 'rugged' label.",
+  )
+  .requiredOption(
+    "--since <date>",
+    "ISO date or anything Date() parses, e.g. 2026-09-01",
+  )
+  .action(async (opts: { since: string }) => {
+    const since = new Date(opts.since);
+    if (Number.isNaN(since.getTime())) {
+      console.error(`not a valid date: ${opts.since}`);
+      Deno.exit(1);
+    }
+
+    try {
+      const client = createRobinhoodClient(Deno.env.get("RPC_URL"));
+      console.error(`searching for launches since ${since.toISOString()}...`);
+      const entries = await runBacktest(client, since);
+      const summary = summarizeBacktest(entries);
+
+      console.log(JSON.stringify({ summary, entries }, null, 2));
+
+      if (summary.verdictsUnavailable > 0) {
+        console.error(
+          `${summary.verdictsUnavailable}/${summary.totalHistoricalLaunches} launches have no verdict (judge failed - see each entry's verdictError). Win-rate figures above only cover the ${summary.verdictsAvailable} that succeeded.`,
+        );
+      }
+    } catch (err) {
+      console.error(
+        `backtest failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      Deno.exit(1);
+    }
+  });
 
 program.parse(Deno.args, { from: "user" });
