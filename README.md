@@ -33,7 +33,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/cli.svg" alt="Warden terminal — judge session" width="760" />
+  <img src="assets/cli.png" alt="Warden terminal — judge session" width="760" />
 </p>
 
 <p align="center">
