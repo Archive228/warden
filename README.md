@@ -1,3 +1,11 @@
+<p align="center">
+  <img src="assets/logo.png" alt="warden" width="160" />
+</p>
+
+<p align="center">
+  <img src="assets/banner.png" alt="WARDEN" width="720" />
+</p>
+
 # warden
 
 Agentic vetting for new token launches. Reads on-chain risk signals for a
@@ -122,10 +130,8 @@ some endpoints 403 outright without one, reproduced live against
 ## Built on
 
 Protocol reference: official [Pons v2 docs](https://docs.ponsfamily.com/v2)
-and [ponsdotdev/ponsfamily](https://github.com/ponsdotdev/ponsfamily) (the
-official Pons contracts repo, MIT-licensed via SPDX headers in the source —
-warden doesn't vendor any of it, it only calls the already-deployed
-contracts through their own ABI). On-chain reads via [viem](https://viem.sh).
+and [ponsdotdev/ponsfamily](https://github.com/ponsdotdev/ponsfamily).
+On-chain reads via [viem](https://viem.sh).
 Chain data cross-checked against [Blockscout](https://robinhoodchain.blockscout.com).
 Agent reasoning (not built yet) will use the Claude API.
 
@@ -184,7 +190,7 @@ Agent reasoning (not built yet) will use the Claude API.
   silently wrong.
 - **Real execution has never been tested with real money, deliberately.**
   Everything short of an actual broadcast is verified: the exact `buy()`
-  signature (from real source), slippage math matched bit-for-bit against a
+  signature, slippage math matched bit-for-bit against a
   real curve's own `simulateContract` result, and 7 unit tests on the
   verdict/confidence/pairing/`--live` gate. Funding a wallet and confirming
   a real transaction lands is a decision for whoever runs this with their
