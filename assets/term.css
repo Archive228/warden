@@ -1,19 +1,21 @@
 :root {
-  --bg: #0b0d10;
-  --term: #141414;
+  --bg: #161920;
+  --term: #232833;
   --ink: #e8e8e8;
-  --dim: #9a9a9a;
-  --mute: #6a6a6a;
+  --dim: #9aa3b0;
+  --mute: #6b7380;
   --cyan: #3ad7dc;
   --cyan-dim: #1f8f94;
   --green: #5dca7a;
   --red: #ff6b6b;
-  --prompt-bg: #2a2a2a;
+  --prompt-bg: #2e3542;
+  --chrome: #1c222c;
+  --line: #323845;
   --kw: #3ad7dc;
   --str: #3ad7dc;
   --num: #e8e8e8;
-  --cmt: #6a6a6a;
-  --ln: #4a4a4a;
+  --cmt: #6b7380;
+  --ln: #4a5568;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { background: var(--bg); }
@@ -30,7 +32,7 @@ body {
   background: var(--term);
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--line);
 }
 .chrome {
   height: 42px;
@@ -38,8 +40,8 @@ body {
   align-items: center;
   gap: 8px;
   padding: 0 14px;
-  background: #1c1c1c;
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--line);
 }
 .dot { width: 12px; height: 12px; border-radius: 50%; }
 .dot.r { background: #ff5f57; }
@@ -96,5 +98,5 @@ body {
 .kw { color: var(--kw); }
 .cmt { color: var(--cmt); font-style: italic; }
 .gutter {
-  border-right: 1px solid #2a2a2a;
+  border-right: 1px solid var(--line);
 }
