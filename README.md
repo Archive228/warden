@@ -7,7 +7,7 @@ repo for authenticity red flags (account-age-vs-activity mismatch, fork/star
 bursts, a self-promoted ticker sitting in the README or the author's bio). An
 agent reasons over both and writes a plain-language verdict, not just a score.
 
-**Status: 2 of 7 features working end-to-end**, the first one independently
+**Status: 3 of 7 features working end-to-end**, the first one independently
 audited (a fresh review re-verified every claim from scratch rather than
 trusting this repo's own docs — see `claude-progress.txt` for what it found,
 including one correction to a claim this README used to make). Two more
@@ -15,6 +15,16 @@ including one correction to a claim this README used to make). Two more
 but not yet verified end-to-end, both blocked on the same shape of gap: a
 credential this environment doesn't have. See `feature_list.json` for exactly
 what's confirmed vs. still open on each.
+
+`warden` reads more than one launchpad now: Pons v2 on Robinhood Chain and
+[four.meme](https://four.meme) on BNB Smart Chain, picked specifically because
+its LP-lock mechanism (burns liquidity via a DEX pair, no vault contract) and
+owner-privilege model (the manager legitimately holds `Ownable` control
+*while a token is still on the curve* — expected, not a red flag) are
+genuinely different from Pons, not just the same shape on a different chain.
+Both normalize to an identical output shape via `--normalized`, verified by
+an automated test that runs both against real live launches and diffs the
+field names directly.
 
 `warden scan <token>` reads a real Pons v2 launch live — curve progress,
 LP-lock, holder concentration, dev-buy history, mint/blacklist facts,
@@ -76,7 +86,9 @@ Requires [Deno](https://deno.com) 2.x — no Node/npm needed.
 
 ```sh
 ./init.sh
-deno task start scan <token-address>
+deno task start scan <token-address>                        # Pons v2 / Robinhood Chain (default)
+deno task start scan <token-address> --launchpad four-meme   # four.meme / BNB Smart Chain
+deno task start scan <token-address> --normalized            # cross-launchpad shape, either one
 deno task start vet-repo <owner>/<repo>
 deno task start judge <token-address> [--repo <owner>/<repo>]
 deno task start watch --once <token-address>   # test feed, one launch, no waiting
@@ -84,6 +96,9 @@ deno task start watch                          # live feed, polls forever, ctrl-
 deno task start watch --live --min-confidence 0.9 --buy-amount-eth 0.01 --slippage-bps 300
 deno task test
 ```
+
+`judge`/`watch` are Pons-only for now — the agent-verdict and alert/execution
+pipeline hasn't been extended to four.meme yet, only the read side has.
 
 `judge` needs `ANTHROPIC_API_KEY`, `watch` additionally needs
 `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`, and `watch --live` additionally
@@ -166,6 +181,33 @@ Agent reasoning (not built yet) will use the Claude API.
   verdict/confidence/pairing/`--live` gate. Funding a wallet and confirming
   a real transaction lands is a decision for whoever runs this with their
   own funds, not something this project does on its own to tick a box.
+
+- **The public RPC's `eth_getLogs` had a real outage while this project was
+  testing** (not rate-limiting this time — a different failure mode).
+  `eth_blockNumber` kept working; `eth_getLogs` on the Pons factory
+  consistently returned `"internal server errror"` (their typo), then later
+  leaked an internal backend address in a timeout error
+  (`10.31.45.18:8547`) — clear evidence of a real, currently-ongoing
+  infrastructure problem on Robinhood Chain's RPC provider side, not
+  anything in this codebase. Two tests that depend on `eth_getLogs`
+  (`src/execute/buy.test.ts`, `src/watch/watch.test.ts`) may fail for this
+  reason and not because of a real regression — check whether the same raw
+  JSON-RPC call fails outside this project before assuming the code broke.
+- **four.meme, on top of the gaps already known for Pons:** only the
+  native-BNB-paired case's PancakeSwap-pair lookup was exercised against a
+  *self-discovered* graduated launch — BSC's overall PancakeSwap volume is
+  too high for a public RPC's `eth_getLogs` window to search for one
+  directly (hit `-32005 limit exceeded` trying), so the burn-percentage
+  arithmetic was instead spot-checked against a specific graduated pair a
+  research pass had already identified, not one this project found on its
+  own. There is no four.meme equivalent of Pons's `PONS_V2_TOKEN_TEMPLATE`
+  (a mint/blacklist-function existence check) — not implemented at all in
+  this pass, and it couldn't be a single fixed constant the way Pons's is
+  even if it were: four.meme tokens are individually-deployed proxy clones
+  with at least two implementation versions seen in concurrent live use, so
+  it would need a per-token selector probe, not a cached fact. `judge`/
+  `watch`/execution have not been extended to four.meme at all yet — only
+  `scan`.
 
 ## License
 

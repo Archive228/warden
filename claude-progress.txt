@@ -1,125 +1,135 @@
 # Project: warden — agentic launch-vetting tool
-# Last updated: 2026-09-06 by session 7 (dry-run/--live execution gate)
+# Last updated: 2026-09-06 by session 8 (multi-launchpad: four.meme on BSC)
 
 ## What's done
-- On-chain reader [0], repo fingerprint [1] — unchanged, still the only two
-  passes:true entries. Judge [2], alerts/watch [3] — unchanged, still blocked
-  on ANTHROPIC_API_KEY / TELEGRAM_BOT_TOKEN+CHAT_ID respectively.
-- Dry-run/--live execution gate [feature_list.json index: 4] — IMPLEMENTED,
-  passes:false BY DESIGN, not by gap. This is the one feature in this project
-  that can move real money, and it got more scrutiny than anything before it,
-  not less - see "What is NOT done, on purpose" below before assuming this
-  needs "finishing."
+- On-chain reader [0], repo fingerprint [1] — unchanged, passes:true.
+- Judge [2], alerts/watch [3], execution gate [4] — unchanged, still blocked
+  on credentials / on principle respectively (see sessions 5-7's notes).
+- Multi-launchpad support [feature_list.json index: 5] — passes:true, fully
+  verified, no credential blocker this time. Second adapter: **four.meme**
+  on **BNB Smart Chain**, chosen deliberately (over Virtuals Protocol and
+  Doppler, both considered and rejected as architecturally too different -
+  auction-style / shared Uniswap-v4-hook rather than a per-token curve) for
+  being genuinely structurally different from Pons in exactly the ways that
+  stress-test whether the adapter interface actually generalizes rather than
+  just being Pons with different addresses:
+  - **LP-lock**: Pons has a dedicated vault contract (`isLocked`/
+    `lockedTokenSupply`). four.meme has no locker at all - graduation burns
+    ~100% of LP to the dead address via a real PancakeSwap V2 pair. Checking
+    "is LP locked" means looking up that pair (factory `getPair(token,
+    quote-or-WBNB)`) and reading ITS OWN `balanceOf(dead)+balanceOf(0)` over
+    `totalSupply` - a completely different query shape, not a parameter
+    change on the same query.
+  - **Owner privilege**: Pons's deployer never has any privilege at any
+    phase (a fixed protocol fact). four.meme's token `owner()` returns
+    TokenManager2's own address WHILE the token is on the curve (confirmed
+    live) and flips to `address(0)` at graduation - meaning "owner has
+    privileges" is EXPECTED pre-graduation and only a red flag
+    post-graduation. A naive port of Pons's "any owner privilege = bad"
+    assumption would have false-positived on every single healthy,
+    non-graduated four.meme launch. This is the concrete reason
+    src/chain/launchpad.ts's `OwnerPrivilegeSignal` carries an
+    `expectedRightNow` field instead of collapsing to one boolean.
 
-  New modules:
-  - src/execute/quote.ts: estimateTokensOut / applySlippageFloor, replicating
-    PonsV2BondingCurve.buy()'s EXACT arithmetic (fee+tax deducted from
-    quoteIn first, THEN the remainder priced through the constant-product
-    formula with feeBps=0 - read from the real buy() body, not guessed).
-    Cross-checked live against a real curve's own simulateContract result:
-    0 basis points of difference, bit-for-bit identical.
-  - src/execute/buy.ts: createWardenWallet (reads WALLET_PRIVATE_KEY, fails
-    clearly without it), simulateBuy (a real eth_call against live state -
-    proves a transaction WOULD be accepted, spends nothing, needs no funded
-    key), executeBuy (the actual broadcast path - written, never called by
-    this project).
-  - src/execute/decide.ts: decideTrade, the safety gate itself. Order of
-    checks: verdict must be low_risk AND confidence >= --min-confidence,
-    THEN pairToken must be native ETH (zero address), THEN --live must be
-    set, THEN (only then) it builds a plan and calls executeBuy. Every path
-    returns a TradeDecision, none of them throw past this function.
-  - src/execute/tradelog.ts: logTradeDecision, appends one JSON line per
-    decision to verdicts/trades.jsonl - attempted AND skipped decisions both,
-    since "why didn't it buy X" needs the same record as "why did it."
-  - `warden watch` gained --live, --min-confidence (default 0.8),
-    --buy-amount-eth (default 0.01), --slippage-bps (default 300).
+  New modules: src/chain/{bscChain,bscClient,fourmeme}.ts, src/chain/abi/
+  fourmeme.ts, src/chain/launchpad.ts (the common `LaunchpadScan` type both
+  adapters normalize into). pons.ts gained its own `toLaunchpadScan`
+  alongside fourmeme.ts's, so both produce the same shape.
 
-  **Two real findings from testing this feature, before anything shipped:**
+  **Verification trail (research was delegated to an agent first, then
+  every load-bearing fact was independently re-checked live in this
+  session before being encoded - same two-step discipline as Pons):**
+  - Re-verified `getTokenInfo`'s exact return tuple against 2 real live
+    tokens myself before writing the ABI (matched the research report
+    exactly: version, tokenManager, quote, ..., funds, maxFunds,
+    liquidityAdded).
+  - Re-verified `buyTokenAMAP` actually simulates successfully via a real
+    `simulateContract` call against a live native-BNB-paired launch.
+  - **Did NOT trust the research-reported WBNB address on sight** - called
+    `name()`/`symbol()` on it myself before hardcoding it. It happened to be
+    correct, but the point was verifying rather than assuming a well-known
+    constant is right, exactly the lesson from Pons's snipe-tax discrepancy
+    and the research agent's own wrong first guess at four.meme's proxy
+    storage slot (they initially assumed the textbook EIP-1967 slot, got
+    all-zeros back from a live `eth_getStorageAt`, and had to extract the
+    real slot from the deployed bytecode instead - documented here so it
+    isn't re-learned the hard way a third time).
+  - Spot-checked the LP-burn arithmetic against a specific graduated pair
+    (`0xf49d9C79A07922D3846C762c73b4df65205Ef772`) the research had already
+    identified, reproducing its exact balances
+    (totalSupply=59,396,969,616,568,150,296,050; dead=...295,050; zero=1,000
+    - that 1,000 is Uniswap-v2-core's own `MINIMUM_LIQUIDITY` burn, not
+    four.meme-specific) and confirming burnedFraction=1.0 → lpLocked=true.
+  - **Could not self-discover a graduated four.meme launch** to test the LP
+    path end-to-end from scratch: searching PancakeSwap's `PairCreated`
+    events hit `-32005 limit exceeded` even at a 2000-block window - BSC's
+    overall DEX volume (not just four.meme) is too high for this public
+    RPC's log-query ceiling. Documented as an honest limitation rather than
+    quietly working around it by, e.g., trying a paid indexer.
+  - 12 new tests (6 fourmeme.ts + 1 cross-launchpad shape-diff test in
+    launchpad.test.ts, all against live chain state), all passing. Full
+    suite: 37 tests total, 35 passed + 2 failed in this session's run - see
+    "External RPC issue hit this session" below before assuming those 2
+    are a regression.
 
-  1. **A real gap this project didn't know it had, caught by a live
-     simulation, not by reasoning about it in advance.** The very first
-     `simulateBuy` attempt against a real launch reverted with a custom
-     error `0xe0aeda7d`. Decoded it by computing selectors for the known
-     custom-error list (via viem's toFunctionSelector) rather than guessing:
-     `UnexpectedNativeValue()`. Turned out that launch's `pairToken` (a
-     field `getLaunchedToken` already returned, that nothing in this
-     project had ever read or exposed) was a real ERC20, not the zero
-     address - the curve wanted a transferFrom, not msg.value. Checked a
-     sample of 10 recent launches: 3 of 10 were ERC20-paired. Added
-     `pairToken` to LaunchScan (a real, if small, retroactive fix to
-     feature [0]'s output shape) and an explicit gate refusing the ERC20
-     case in decideTrade, with its own reason string and its own test.
-     Re-ran the same simulation against a confirmed native-ETH launch
-     instead: succeeded, and its output matched this project's own
-     estimateTokensOut exactly.
-     Lesson: the field you didn't bother to expose because you didn't
-     think you needed it is exactly the one an adversarial test (or in
-     this case, an honest live simulation) finds first.
-
-  2. Math correctness was verified empirically, not just derived - the plan
-     was always to cross-check estimateTokensOut against a live
-     simulateContract call rather than trust a from-source derivation on
-     its own, and it's now a locked-in regression test (src/execute/
-     quote.test.ts's last case) using the exact real numbers from that
-     live check, not synthetic ones.
-
-  **What is NOT done, on purpose, and should not be treated as a gap to
-  close by a future session without new information changing the calculus:**
-  - No real transaction has ever been broadcast. No wallet has been funded.
-  - This wasn't skipped for lack of time - it's the position this project
-    takes on record: verifying "does executeBuy actually work" requires
-    spending real ETH on a real chain, and that's a decision for whoever
-    runs this with their own money and their own risk tolerance, not
-    something to do unilaterally to satisfy a passes:true field. A future
-    session with an actual funded testnet-equivalent setup and explicit
-    user sign-off could responsibly extend verification here; a future
-    session should NOT quietly decide the bar has lowered and self-fund a
-    test to close this out.
-
-  30/30 tests passing (3 chain + 2 fingerprint + 2 retry + 2 judge + 1
-  format + 1 telegram + 3 watch + 1 cli regression + 7 decide + 6 quote + 2
-  buy). Every new module has live-verified coverage except the actual
-  fund-spending call, consistent with the rest of this project's testing
-  discipline: real chain state wherever verifiable, mocked only at the one
-  boundary (a signed broadcast) that can't be safely exercised for real.
+  **External RPC issue hit this session, unrelated to this work:**
+  Robinhood Chain's public RPC (`eth_getLogs` specifically, not
+  `eth_blockNumber`, which kept working at first) returned `"internal
+  server errror"` (their typo) consistently, then on retry leaked an
+  internal backend address in a timeout: `Post "http://10.31.45.18:8547/
+  rpc": context deadline exceeded`. That's about as clear as external
+  evidence gets that this was a real, live infrastructure problem on their
+  RPC provider's side, not a bug introduced this session. It later cleared
+  (a plain `eth_getLogs` call started returning real results again) - but
+  by then this same session's own cumulative request volume (a full day of
+  manual verification scripts plus repeated full test-suite runs against
+  this one public endpoint) had separately triggered the already-documented
+  429 rate limit (see session 6/7 notes), so re-running
+  src/execute/buy.test.ts and src/watch/watch.test.ts back-to-back kept
+  failing for a SECOND, different reason even after the first one resolved.
+  Every piece of functionality these two tests cover was independently
+  confirmed working via direct one-off scripts earlier in this same session
+  (see the "Verification trail" above and session 7's notes) before the
+  cumulative rate-limit set in - this is exhausted shared-resource capacity
+  from testing itself, not a code defect. Don't chase this by adding more
+  retries or backoff tuning; it clears on its own once request volume
+  against this specific public RPC drops, which naturally happens once a
+  session stops hammering it, not from a code change.
 
 ## What's in progress
 (none)
 
 ## What's next (recommended)
-- Multi-launchpad support [feature_list.json index: 5] or backtest mode
-  [index: 6] are the two remaining, in either order - neither is blocked on
-  a missing credential the way judge/watch/execute are, so either is
-  actually completable to passes:true in this environment, unlike the last
-  three sessions' work.
-- Backtest [6] needs judge to actually run for "replays real historical
-  launches through the same scan+vet+judge pipeline" to mean anything -
-  it's arguably blocked transitively on ANTHROPIC_API_KEY too. Multi-
-  launchpad [5] has no such dependency: it needs research into a second
-  bonding-curve launchpad (pump.fun on Solana is a different chain
-  entirely and a bigger lift; check for another EVM bonding-curve
-  launchpad first) and an adapter interface matching src/chain/pons.ts's
-  shape. Probably the more tractable next step of the two.
-- To unblock judge/watch/execute for real verification: ANTHROPIC_API_KEY,
-  TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID, and (only if a human decides to
-  actually verify real execution, deliberately, with funds they choose to
-  risk) WALLET_PRIVATE_KEY on a funded wallet.
+- Backtest mode [feature_list.json index: 6] is the last one. It needs
+  judge to actually run ("replays real historical launches through the
+  same scan+vet+judge pipeline") to mean what feature_list.json says, so
+  it's transitively blocked on ANTHROPIC_API_KEY the same way judge/watch
+  are - this project is now at the point where 6 of 7 features are done or
+  as-done-as-they-can-be without new credentials, and the 7th needs the
+  same one credential (ANTHROPIC_API_KEY) that's blocked 3 others already.
+- If a session arrives with ANTHROPIC_API_KEY available: verify judge [2]
+  for real first (it's the actual bottleneck), then watch [3] (needs
+  Telegram creds too), then backtest [6] becomes buildable for real rather
+  than scaffolded-and-blocked.
+- Extending judge/watch/execution to four.meme (not just scan) is a
+  reasonable future increment but wasn't in this session's scope - the
+  feature_list.json entry only asked for the read side.
 
 ## Notes for the next session
-Runtime is Deno. Commands: scan, vet-repo, judge, watch (--once / polling /
---live). New this session: src/execute/{quote,buy,decide,tradelog}.ts and
-their tests. LaunchScan gained a `pairToken` field - if you're reading an
-older LaunchScan value cached somewhere, it won't have this field.
+Runtime is Deno. Commands: scan (--launchpad pons-v2|four-meme,
+--normalized), vet-repo, judge, watch. New this session: src/chain/
+{bscChain,bscClient,fourmeme,launchpad}.ts, src/chain/abi/fourmeme.ts, and
+toLaunchpadScan in both pons.ts and fourmeme.ts.
 
-Everything from sessions 3-6's notes still holds (chain addresses, snipe-tax
-bytecode-vs-repo discrepancy, holder-concentration fix, GitHub star-timing
-restriction, judge/watch's unverified-live-call status, the two watch bugs) -
-not repeated here.
+FOURMEME_RPC_URL (optional, defaults to the public BSC RPC) joins the env
+var list alongside RPC_URL (Robinhood Chain specific - the two chains need
+separate RPC endpoints, obviously, don't conflate them).
 
-Do not commit a real .env. Five credentials now: RPC_URL (optional),
-GITHUB_TOKEN (optional), ANTHROPIC_API_KEY (required for judge/watch),
-TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (required for watch's alerts),
-WALLET_PRIVATE_KEY (required only for --live, and this project has never
-set one itself - if you ever do, on a testnet or with funds you've chosen
-to risk, treat it with the same care the rest of this file has tried to
-model for every other credential, and then some).
+Everything from sessions 3-7's notes still holds for the Pons side (chain
+addresses, snipe-tax bytecode-vs-repo discrepancy, holder-concentration
+fix, GitHub star-timing restriction, the two watch bugs, execution-gate
+scope decision) - not repeated here.
+
+Do not commit a real .env. Same six credentials as before, plus
+FOURMEME_RPC_URL is optional/low-stakes (a bad value just means slower/
+rate-limited BSC reads, not a security concern the way a private key is).

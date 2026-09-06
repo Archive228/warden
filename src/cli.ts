@@ -2,8 +2,16 @@
 import { Command } from "commander";
 import { isAddress } from "viem";
 import { createRobinhoodClient } from "./chain/client.ts";
+import { createBscClient } from "./chain/bscClient.ts";
 import { fetchHolderConcentration } from "./chain/holders.ts";
-import { scanLaunch } from "./chain/pons.ts";
+import {
+  scanLaunch,
+  toLaunchpadScan as ponsToLaunchpadScan,
+} from "./chain/pons.ts";
+import {
+  scanFourMemeLaunch,
+  toLaunchpadScan as fourMemeToLaunchpadScan,
+} from "./chain/fourmeme.ts";
 import { vetRepo } from "./repo/fingerprint.ts";
 import { judgeLaunch, saveVerdictLog } from "./judge/judge.ts";
 import { formatVerdictMessage } from "./alerts/format.ts";
@@ -23,49 +31,99 @@ program
 program
   .command("scan <token>")
   .description(
-    "Read a Pons v2 launch on-chain: curve state, LP lock, holder concentration",
+    "Read a launch on-chain: curve state, LP lock, holder concentration. --launchpad selects which protocol/chain (default pons-v2).",
   )
-  .action(async (token: string) => {
-    if (!isAddress(token)) {
-      console.error(`not a valid address: ${token}`);
-      Deno.exit(1);
-    }
+  .option(
+    "--launchpad <name>",
+    "pons-v2 (Robinhood Chain) or four-meme (BNB Smart Chain)",
+    "pons-v2",
+  )
+  .option(
+    "--normalized",
+    "also print the cross-launchpad normalized view (same shape regardless of --launchpad)",
+    false,
+  )
+  .action(
+    async (token: string, opts: { launchpad: string; normalized: boolean }) => {
+      if (!isAddress(token)) {
+        console.error(`not a valid address: ${token}`);
+        Deno.exit(1);
+      }
 
-    try {
-      const client = createRobinhoodClient(Deno.env.get("RPC_URL"));
-      const scan = await scanLaunch(client, token);
+      try {
+        if (opts.launchpad === "four-meme") {
+          const client = createBscClient(Deno.env.get("FOURMEME_RPC_URL"));
+          const scan = await scanFourMemeLaunch(client, token);
 
-      if (!scan.exists) {
+          if (!scan.exists) {
+            console.log(
+              JSON.stringify(
+                { token, exists: false, note: "not a four.meme launch" },
+                null,
+                2,
+              ),
+            );
+            return;
+          }
+
+          const output = opts.normalized ? fourMemeToLaunchpadScan(scan) : scan;
+          console.log(
+            JSON.stringify(
+              output,
+              (_key, value) =>
+                typeof value === "bigint" ? value.toString() : value,
+              2,
+            ),
+          );
+          return;
+        }
+
+        if (opts.launchpad !== "pons-v2") {
+          console.error(
+            `unknown --launchpad: ${opts.launchpad} (expected pons-v2 or four-meme)`,
+          );
+          Deno.exit(1);
+        }
+
+        const client = createRobinhoodClient(Deno.env.get("RPC_URL"));
+        const scan = await scanLaunch(client, token);
+
+        if (!scan.exists) {
+          console.log(
+            JSON.stringify(
+              {
+                token,
+                exists: false,
+                note: "not a Pons v2 launch on this factory",
+              },
+              null,
+              2,
+            ),
+          );
+          return;
+        }
+
+        const holders = await fetchHolderConcentration(token, scan.totalSupply);
+        const output = opts.normalized
+          ? ponsToLaunchpadScan(scan)
+          : { ...scan, holders };
+
         console.log(
           JSON.stringify(
-            {
-              token,
-              exists: false,
-              note: "not a Pons v2 launch on this factory",
-            },
-            null,
+            output,
+            (_key, value) =>
+              typeof value === "bigint" ? value.toString() : value,
             2,
           ),
         );
-        return;
+      } catch (err) {
+        console.error(
+          `scan failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        Deno.exit(1);
       }
-
-      const holders = await fetchHolderConcentration(token, scan.totalSupply);
-
-      console.log(
-        JSON.stringify(
-          { ...scan, holders },
-          (_key, value) => typeof value === "bigint" ? value.toString() : value,
-          2,
-        ),
-      );
-    } catch (err) {
-      console.error(
-        `scan failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      Deno.exit(1);
-    }
-  });
+    },
+  );
 
 program
   .command("vet-repo <owner/repo>")

@@ -8,6 +8,7 @@ import {
   ponsV2LaunchLockerAbi,
 } from "./abi/locker.ts";
 import { withRetry } from "../util/retry.ts";
+import type { LaunchpadScan } from "./launchpad.ts";
 
 // Exemptions are a specific address allowlist set at launch (deployer +
 // creator + up to 32 extra) — this is just some address that was
@@ -240,5 +241,30 @@ async function fetchDevBuys(
       (sum, log) => sum + (log.args.quoteIn ?? 0n),
       0n,
     ),
+  };
+}
+
+export function toLaunchpadScan(
+  scan: Extract<LaunchScan, { exists: true }>,
+): Extract<LaunchpadScan, { exists: true }> {
+  return {
+    launchpad: "pons-v2",
+    token: scan.token,
+    exists: true,
+    name: scan.name,
+    symbol: scan.symbol,
+    totalSupply: scan.totalSupply,
+    decimals: scan.decimals,
+    quoteAsset: scan.pairToken,
+    progress: scan.progress,
+    graduated: scan.graduated,
+    feeBps: Number(scan.feeBps),
+    lpLocked: scan.lpLocked,
+    lpLockMechanism: "vault",
+    ownerPrivilege: {
+      checked: true,
+      active: false,
+      expectedRightNow: false,
+    },
   };
 }

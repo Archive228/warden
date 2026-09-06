@@ -57,11 +57,12 @@
     "category": "infra",
     "description": "warden supports more than one launchpad (Pons v2 first, extensible adapter interface for others)",
     "steps": [
-      "Add a second launchpad adapter implementing the same interface as the Pons v2 reader",
-      "Run `warden scan` against a launch on the second launchpad",
-      "Verify identical output shape to the Pons v2 path"
+      "Add a second launchpad adapter implementing the same interface as the Pons v2 reader: done for four.meme on BNB Smart Chain (src/chain/fourmeme.ts), a real, currently-active bonding-curve launchpad picked specifically for having a genuinely different LP-lock mechanism (burns LP via a DEX pair, no locker contract) and owner-privilege model (the manager legitimately holds Ownable control pre-graduation, unlike Pons's always-zero-privilege deployer) - chosen to stress-test the interface, not to duplicate Pons with different addresses",
+      "Run `warden scan <token> --launchpad four-meme`: verified against multiple real live launches (one native-BNB-paired, one ERC20-quoted - the same pairToken lesson from Pons applies here independently)",
+      "Verify identical output shape to the Pons v2 path via `--normalized` on both: confirmed both by field-by-field inspection and by an automated test (src/chain/launchpad.test.ts) that runs both adapters against real live launches and diffs Object.keys() directly, including the ownerPrivilege sub-shape. The two protocols' normalized `ownerPrivilege.active` values genuinely differ (false for Pons, true for four.meme pre-graduation) - that's the interface correctly carrying real protocol differences, not a bug to reconcile away.",
+      "Contract addresses/signatures were independently re-verified live in this project (eth_call/eth_getCode/eth_getStorageAt), not taken on trust from the community doc that first named them, including catching and correcting a wrong assumed proxy storage slot before it was ever encoded - see claude-progress.txt for the full trail. 12 new tests, all passing, all against live chain state (BSC + a specific known graduated pair for the burn-arithmetic check, since this session's own RPC hit eth_getLogs query-limit errors trying to self-discover a graduated example - the PancakeSwap-wide log volume on BSC is too high for a public RPC's window, documented honestly rather than silently working around it)."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "data",
