@@ -5,6 +5,7 @@
   "exports": "./src/cli.ts",
   "tasks": {
     "start": "deno run --allow-net --allow-env --allow-read --allow-write src/cli.ts",
+    "demo": "deno run src/demo.ts",
     "test": "deno test --allow-net --allow-env --allow-read --allow-write --allow-run"
   },
   "imports": {

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>warden — terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0d10;
+      --term: #141414;
+      --ink: #e8e8e8;
+      --dim: #9a9a9a;
+      --mute: #6a6a6a;
+      --cyan: #3ad7dc;
+      --cyan-dim: #1f8f94;
+      --green: #5dca7a;
+      --red: #ff6b6b;
+      --prompt-bg: #2a2a2a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    }
+    .window {
+      width: min(920px, 100%);
+      background: var(--term);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #2a2a2a;
+    }
+    .chrome {
+      height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      background: #1c1c1c;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot.r { background: #ff5f57; }
+    .dot.y { background: #febc2e; }
+    .dot.g { background: #28c840; }
+    .chrome span {
+      flex: 1;
+      text-align: center;
+      color: #7a7a7a;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+    }
+    .term {
+      padding: 28px 32px 36px;
+      color: var(--ink);
+      font-size: 13.5px;
+      line-height: 1.55;
+      white-space: pre;
+    }
+    .cyan { color: var(--cyan); }
+    .cyan-dim { color: var(--cyan-dim); }
+    .green { color: var(--green); }
+    .dim { color: var(--dim); }
+    .mute { color: var(--mute); }
+    .red { color: var(--red); }
+    .logo {
+      color: var(--cyan);
+      font-weight: 500;
+      font-size: 12px;
+      line-height: 1.12;
+      letter-spacing: 0.02em;
+      text-shadow: 2px 2px 0 #0d4a4d;
+      margin: 10px 0 12px;
+    }
+    .prompt {
+      display: block;
+      background: var(--prompt-bg);
+      padding: 3px 10px;
+      margin: 16px -10px 14px;
+      width: fit-content;
+    }
+    .welcome {
+      color: var(--cyan);
+      line-height: 1.2;
+    }
+    table.snap {
+      border-collapse: collapse;
+      margin: 8px 0 12px;
+      font-size: 13.5px;
+    }
+    table.snap td {
+      padding: 2px 22px 2px 0;
+      white-space: nowrap;
+    }
+    table.snap td:first-child { color: var(--dim); }
+    .rule {
+      color: #3a3a3a;
+    }
+  </style>
+</head>
+<body>
+  <div class="window">
+    <div class="chrome">
+      <div class="dot r"></div>
+      <div class="dot y"></div>
+      <div class="dot g"></div>
+      <span>warden — judge</span>
+    </div>
+    <div class="term"><span class="welcome"> ╔══════════════════════════════════════════╗
+ ║       Welcome to Warden v0.1.0           ║
+ ╚══════════════════════════════════════════╝</span>
+<div class="logo">██╗    ██╗ █████╗ ██████╗ ██████╗ ███████╗███╗   ██╗
+██║    ██║██╔══██╗██╔══██╗██╔══██╗██╔════╝████╗  ██║
+██║ █╗ ██║███████║██████╔╝██║  ██║█████╗  ██╔██╗ ██║
+██║███╗██║██╔══██╗██╔══██╗██║  ██║██╔══╝  ██║╚██╗██║
+╚███╔███╔╝██║  ██║██║  ██║██████╔╝███████╗██║ ╚████║
+ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═══╝</div>
+<span class="dim">Agentic vetting for new token launches.
+Current model: </span><span class="cyan">claude-sonnet-5</span><span class="mute">   Type --repo to attach a fingerprint.</span>
+
+<span class="prompt"><span class="cyan">❯</span> warden judge 0xc65AF5ed…8456 --repo Phosphenq/bodkin</span>
+<span class="cyan">●</span> scanLaunch("0xc65AF5ed7d40A2A0C8E362B93b4AF70A40a58456")
+  <span class="mute">⌞</span> <span class="green">14 live contract reads in 1.8s</span>
+<span class="cyan">●</span> vetRepo("Phosphenq/bodkin")
+  <span class="mute">⌞</span> <span class="green">6 forks in 19m · $BODKIN in README + bio</span>
+<span class="cyan">●</span> record_verdict
+  <span class="mute">⌞</span> <span class="green">high_risk @ 0.91  ·  log: verdicts/0xc65A…-17256.json</span>
+
+<span class="dim">●</span> A 2019 account that sat still until last week, then six forks in
+  nineteen minutes and a ticker in the README. The curve looks ordinary.
+  The GitHub does not.
+
+  <span class="dim">Snapshot</span>
+  <span class="rule">  ─────────────────────────────────────────────</span>
+  <span class="dim">  progress            </span>12.4%
+  <span class="dim">  lpLocked            </span>false   <span class="mute">phase=0, expected</span>
+  <span class="dim">  topHolderShare      </span>0.184
+  <span class="dim">  dormancyGapDays     </span>2481
+  <span class="dim">  forkBurst           </span>6 in 19 min
+  <span class="dim">  tickerMentions      </span>$BODKIN × 2
+  <span class="rule">  ─────────────────────────────────────────────</span>
+
+  <span class="dim">Signals</span>
+  <span class="mute">  -</span> dormancyGapDays=2481 — created 2019, first visible repo 2026-09-03
+  <span class="mute">  -</span> forkBurst.count=6 window=19m
+  <span class="mute">  -</span> tickerMentions=$BODKIN in README and bio
+  <span class="mute">  -</span> lpLocked=false, phase=0 — not a red flag
+  <span class="mute">  -</span> mint/blacklist=false — Pons v2 template
+
+  <span class="red">● HIGH RISK</span>  <span class="mute">confidence 91%  ·  dry-run, no buy</span>
+</div>
+  </div>
+</body>
+</html>

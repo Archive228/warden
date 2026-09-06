@@ -32,6 +32,18 @@
   <img src="assets/banner.png" alt="WARDEN" width="760" />
 </p>
 
+<p align="center">
+  <img src="assets/cli.svg" alt="Warden terminal — judge session" width="760" />
+</p>
+
+<p align="center">
+  <sub>
+    Open the same session in a browser:
+    <a href="assets/terminal.html"><code>assets/terminal.html</code></a>
+    · or run <code>deno task demo</code>
+  </sub>
+</p>
+
 Most launch tools stare at the curve and call it due diligence. Warden reads the token *and* the story around it — then writes down what it actually saw, including what it could not check.
 
 <br />
@@ -250,10 +262,11 @@ What is green below was checked against live state. What is not green is impleme
 
 Requires [Deno](https://deno.com) 2.x. No Node, no npm, no Docker. `./init.sh` is idempotent: it creates a `.env` from the example if you do not have one, installs deps, and does not ask questions.
 
-Commands below assume you are at the repo root. `judge` / `watch` / `backtest` will fail closed if the keys they need are missing — a specific error, not a stack trace.
+Commands below assume you are at the repo root. `deno task demo` prints a turquoise terminal session (no chain, no keys) — same picture as the visual above. `judge` / `watch` / `backtest` will fail closed if the keys they need are missing — a specific error, not a stack trace.
 
 ```sh
 ./init.sh
+deno task demo
 deno task start scan <token-address>
 deno task start scan <token-address> --launchpad four-meme
 deno task start scan <token-address> --normalized
