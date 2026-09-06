@@ -125,32 +125,31 @@
 <span class="dim">Agentic vetting for new token launches.
 Current model: </span><span class="cyan">claude-sonnet-5</span><span class="mute">   Type --repo to attach a fingerprint.</span>
 
-<span class="prompt"><span class="cyan">❯</span> warden judge 0xc65AF5ed…8456 --repo Phosphenq/bodkin</span>
-<span class="cyan">●</span> scanLaunch("0xc65AF5ed7d40A2A0C8E362B93b4AF70A40a58456")
+<span class="prompt"><span class="cyan">❯</span> warden judge 0x1111…1111 --repo acme/launch</span>
+<span class="cyan">●</span> scanLaunch("0x1111111111111111111111111111111111111111")
   <span class="mute">⌞</span> <span class="green">14 live contract reads in 1.8s</span>
-<span class="cyan">●</span> vetRepo("Phosphenq/bodkin")
-  <span class="mute">⌞</span> <span class="green">6 forks in 19m · $BODKIN in README + bio</span>
+<span class="cyan">●</span> vetRepo("acme/launch")
+  <span class="mute">⌞</span> <span class="green">4 forks in 11m · $ACME in README</span>
 <span class="cyan">●</span> record_verdict
-  <span class="mute">⌞</span> <span class="green">high_risk @ 0.91  ·  log: verdicts/0xc65A…-17256.json</span>
+  <span class="mute">⌞</span> <span class="green">high_risk @ 0.91  ·  log: verdicts/0x1111…-17256.json</span>
 
-<span class="dim">●</span> A 2019 account that sat still until last week, then six forks in
-  nineteen minutes and a ticker in the README. The curve looks ordinary.
-  The GitHub does not.
+<span class="dim">●</span> Dormant GitHub, a tight fork burst, a ticker in the README.
+  The curve looks ordinary. The GitHub does not.
 
   <span class="dim">Snapshot</span>
   <span class="rule">  ─────────────────────────────────────────────</span>
   <span class="dim">  progress            </span>12.4%
   <span class="dim">  lpLocked            </span>false   <span class="mute">phase=0, expected</span>
   <span class="dim">  topHolderShare      </span>0.184
-  <span class="dim">  dormancyGapDays     </span>2481
-  <span class="dim">  forkBurst           </span>6 in 19 min
-  <span class="dim">  tickerMentions      </span>$BODKIN × 2
+  <span class="dim">  dormancyGapDays     </span>1226
+  <span class="dim">  forkBurst           </span>4 in 11 min
+  <span class="dim">  tickerMentions      </span>$ACME × 1
   <span class="rule">  ─────────────────────────────────────────────</span>
 
   <span class="dim">Signals</span>
-  <span class="mute">  -</span> dormancyGapDays=2481 — created 2019, first visible repo 2026-09-03
-  <span class="mute">  -</span> forkBurst.count=6 window=19m
-  <span class="mute">  -</span> tickerMentions=$BODKIN in README and bio
+  <span class="mute">  -</span> dormancyGapDays=1226 — created 2023, first visible repo 2026-08-19
+  <span class="mute">  -</span> forkBurst.count=4 window=11m
+  <span class="mute">  -</span> tickerMentions=$ACME in README
   <span class="mute">  -</span> lpLocked=false, phase=0 — not a red flag
   <span class="mute">  -</span> mint/blacklist=false — Pons v2 template
 

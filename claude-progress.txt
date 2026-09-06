@@ -73,8 +73,8 @@ verified, and the other 3 are ALL blocked on one single missing credential
 "pick the next feature" work to do productively without it. Concretely, in
 priority order if/when a key becomes available:
 1. Add a real ANTHROPIC_API_KEY to .env. Run `warden judge <token>` against
-   a real launch (ideally one with `--repo Phosphenq/bodkin` if that launch
-   is still live, for a case with real, known red flags to weigh) and read
+   a real launch (attach `--repo` if the launch actually links a GitHub)
+   and read
    the actual output. Check specifically whether the 6 pieces of "known
    context" baked into judge's system prompt (session 5's notes list them)
    actually change its reasoning the way they're meant to, not just whether

@@ -50,8 +50,6 @@ Most launch tools stare at the curve and call it due diligence. Warden reads the
   <img src="assets/cli.png" alt="Warden terminal — judge session" width="760" />
 </p>
 
-<br />
-
 ## Contents
 
 1. [Why](#why)
@@ -70,29 +68,23 @@ Most launch tools stare at the curve and call it due diligence. Warden reads the
 9. [Built on](#built-on)
 10. [License](#license)
 
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/b78fd085-43c2-4df4-b039-9290c4eaf018" width="760" controls muted playsinline></video>
-</p>
-
 ---
 
 ## Why
 
-A launch-sniper README said one thing. The GitHub account said another.
+Sniper bots already read LP locks, mint functions, and holder concentration. Those are the cheap ways to get rugged. They almost never look at whether the GitHub attached to the launch is a real project or a costume.
 
-The repo looked like a serious product. The activity log looked like a costume: an account that had been sitting still for years, then a burst of forks in the same twenty minutes, a ticker appearing in the README, a contract address parked in the author's bio. None of that is on-chain. A bonding-curve scan would have called the token fine.
+Warden is that second look — same vigilance, pointed at the project publicizing the token, not just the contract.
 
-That gap is the whole point of this project. Sniper bots already read LP locks, mint functions, and holder concentration because those are the cheap ways to get rugged. They almost never look at whether the *people* shipping the launch are real. Warden is that second look — same vigilance, pointed at the project publicizing the token, not just the contract.
+- Account age vs oldest visible repo
+- Forks clustering inside a tight window
+- `$TICKER` in README or bio (sharp) vs a raw `0x…` in protocol docs (weak)
+- Missing data stays missing — a GitHub restriction is not a clean bill of health
 
-- Dormant account, suddenly awake
-- Six forks in a 19-minute window
-- Token ticker dropped into the README
-- Contract address sitting in the author's bio
-
-If those four show up together, the README is advertising. The chain still has to be checked. Warden does both, and it will say when a check was impossible rather than quietly treating a missing signal as clean.
+If those show up together, the README is advertising. The chain still has to be checked. Warden does both.
 
 <p align="center">
-  <img src="assets/vet-repo.png" alt="warden vet-repo on Phosphenq/bodkin: dormant 2019 account, six forks in 19 minutes, $BODKIN in README and bio" width="760" />
+  <img src="assets/vet-repo.png" alt="warden vet-repo: JSON fingerprint of a linked GitHub account" width="760" />
 </p>
 
 ---
@@ -138,14 +130,14 @@ This is the off-chain half, and the reason the project exists. A launch that lin
 - `$TICKER` in README/bio (sharp) vs raw `0x…` addresses (weak — legitimate protocol docs are full of them)
 - Star-burst timing: **unavailable on purpose** — GitHub locked stargazer lists. Never treated as “no burst found.”
 
-Ground truth was not synthetic. `Phosphenq/bodkin` is the known-bad profile from [Why](#why). `ponsdotdev/ponsfamily` is a legitimate protocol repo whose README is full of real contract addresses — Warden has to *not* flag that as shilling. Works unauthenticated; a `GITHUB_TOKEN` is what you want for anything past a one-off, because some user endpoints 403 without one.
+The screenshots use a synthetic fixture so you can see the JSON shape. Against a live known-clean repo (`ponsdotdev/ponsfamily` — real Pons protocol docs, full of contract addresses) Warden has to *not* flag those addresses as ticker-shilling. Works unauthenticated; a `GITHUB_TOKEN` is what you want for anything past a one-off, because some user endpoints 403 without one.
 
 ```sh
 deno task start vet-repo <owner>/<repo>
 ```
 
 <p align="center">
-  <img src="assets/vet-repo.png" alt="warden vet-repo on Phosphenq/bodkin: dormant 2019 account, six forks in 19 minutes, $BODKIN in README and bio" width="760" />
+  <img src="assets/vet-repo.png" alt="warden vet-repo: JSON fingerprint of a linked GitHub account" width="760" />
 </p>
 
 ### `judge`

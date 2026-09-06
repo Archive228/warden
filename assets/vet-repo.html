@@ -17,28 +17,27 @@
       <div class="dot g"></div>
       <span>warden — vet-repo</span>
     </div>
-    <div class="term"><span class="prompt"><span class="cyan">❯</span> warden vet-repo Phosphenq/bodkin</span><span class="mute">{</span>
-  <span class="key">"owner"</span>: <span class="str">"Phosphenq"</span>,
-  <span class="key">"repo"</span>: <span class="str">"bodkin"</span>,
-  <span class="key">"accountCreatedAt"</span>: <span class="str">"2019-03-14T…"</span>,
-  <span class="key">"oldestVisibleRepoCreatedAt"</span>: <span class="str">"2026-09-03T…"</span>,
-  <span class="key">"dormancyGapDays"</span>: <span class="num">2481</span>,
-  <span class="key">"forkCount"</span>: <span class="num">6</span>,
+    <div class="term"><span class="prompt"><span class="cyan">❯</span> warden vet-repo acme/launch</span><span class="mute">{</span>
+  <span class="key">"owner"</span>: <span class="str">"acme"</span>,
+  <span class="key">"repo"</span>: <span class="str">"sample"</span>,
+  <span class="key">"accountCreatedAt"</span>: <span class="str">"2023-04-11T…"</span>,
+  <span class="key">"oldestVisibleRepoCreatedAt"</span>: <span class="str">"2026-08-19T…"</span>,
+  <span class="key">"dormancyGapDays"</span>: <span class="num">1226</span>,
+  <span class="key">"forkCount"</span>: <span class="num">4</span>,
   <span class="key">"forkBurst"</span>: {
     <span class="key">"windowMinutes"</span>: <span class="num">30</span>,
-    <span class="key">"count"</span>: <span class="num">6</span>,
-    <span class="key">"first"</span>: <span class="str">"2026-09-03T18:02:11Z"</span>,
-    <span class="key">"last"</span>: <span class="str">"2026-09-03T18:21:04Z"</span>
+    <span class="key">"count"</span>: <span class="num">4</span>,
+    <span class="key">"first"</span>: <span class="str">"2026-08-19T14:02:00Z"</span>,
+    <span class="key">"last"</span>: <span class="str">"2026-08-19T14:13:00Z"</span>
   },
   <span class="key">"starTimingAvailable"</span>: <span class="bool">false</span>,
   <span class="key">"tickerMentions"</span>: [
-    { <span class="key">"location"</span>: <span class="str">"readme"</span>, <span class="key">"match"</span>: <span class="str">"$BODKIN"</span> },
-    { <span class="key">"location"</span>: <span class="str">"bio"</span>,    <span class="key">"match"</span>: <span class="str">"$BODKIN"</span> }
+    { <span class="key">"location"</span>: <span class="str">"readme"</span>, <span class="key">"match"</span>: <span class="str">"$ACME"</span> }
   ],
   <span class="key">"contractAddressMentions"</span>: []
 <span class="mute">}</span>
 
-<span class="red">● dormant 2019 account, six forks in 19 minutes, ticker in README + bio</span>
+<span class="red">● dormant account, fork burst, ticker in README</span>
 <span class="mute">  starTimingAvailable=false is a GitHub restriction — not “no burst found.”</span>
 </div>
   </div>

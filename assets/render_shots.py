@@ -13,6 +13,7 @@ SHOTS = [
     ("vet-repo.html", "vet-repo.png"),
     ("watch.html", "watch.png"),
     ("gate.html", "gate.png"),
+    ("terminal.html", "cli.png"),
 ]
 
 

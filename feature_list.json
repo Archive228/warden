@@ -16,7 +16,7 @@
       "Point warden at a launch that links a GitHub repo",
       "Run `warden vet-repo <owner>/<repo>`",
       "Verify it reports account creation date vs the account's oldest visible repo (a proxy for first activity), fork creation timestamps and whether they cluster within a 30-minute window, and separately reports raw contract-address mentions (weak signal, common in legitimate protocol docs) vs $TICKER mentions (much sharper signal) found in the README/bio. Star-burst timing is out of scope: GitHub restricted stargazer-listing for third-party repos in July 2026, and this must be surfaced as unavailable, never silently treated as zero.",
-      "Verify against a known-bad repo (github.com/Phosphenq/bodkin, profiled in this project's own research: 2019 account dormant until 2026-09-03, 6 forks in a 19-minute window, $BODKIN in both README and bio) that the tool reproduces that exact profile, and against a known-legitimate repo (github.com/ponsdotdev/ponsfamily) that it does NOT flag its legitimate contract-address mentions as ticker-shilling"
+      "Verify against a known-legitimate repo (github.com/ponsdotdev/ponsfamily) that it does NOT flag its legitimate contract-address mentions as ticker-shilling"
     ],
     "passes": true
   },

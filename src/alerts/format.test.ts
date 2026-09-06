@@ -8,7 +8,7 @@ Deno.test("formatVerdictMessage includes the category, confidence, summary, toke
     summary: "This looks like a promotional wrapper, not a real launch.",
     signalsWeighed: [
       "lpLocked=false (phase=2, post-graduation, so this is meaningful)",
-      "tickerMentions=1 ($BODKIN in bio)",
+      "tickerMentions=1 ($ACME in bio)",
     ],
     reasoningLog: "unused in the formatted message",
   });
@@ -18,5 +18,5 @@ Deno.test("formatVerdictMessage includes the category, confidence, summary, toke
   assertStringIncludes(message, "promotional wrapper");
   assertStringIncludes(message, "0xTOKEN");
   assertStringIncludes(message, "lpLocked=false");
-  assertStringIncludes(message, "$BODKIN");
+  assertStringIncludes(message, "$ACME");
 });

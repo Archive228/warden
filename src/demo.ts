@@ -34,25 +34,24 @@ line(
 );
 line();
 line(
-  `${C.promptBg}${C.cyan}❯${C.ink} warden judge 0xc65AF5ed…8456 --repo Phosphenq/bodkin ${C.reset}`,
+  `${C.promptBg}${C.cyan}❯${C.ink} warden judge 0x1111…1111 --repo acme/launch ${C.reset}`,
 );
 line();
 line(
-  `${C.cyan}●${C.ink} scanLaunch("0xc65AF5ed7d40A2A0C8E362B93b4AF70A40a58456")`,
+  `${C.cyan}●${C.ink} scanLaunch("0x1111111111111111111111111111111111111111")`,
 );
 line(`  ${C.mute}⌞ ${C.green}14 live contract reads in 1.8s`);
-line(`${C.cyan}●${C.ink} vetRepo("Phosphenq/bodkin")`);
-line(`  ${C.mute}⌞ ${C.green}6 forks in 19m · $BODKIN in README + bio`);
+line(`${C.cyan}●${C.ink} vetRepo("acme/launch")`);
+line(`  ${C.mute}⌞ ${C.green}4 forks in 11m · $ACME in README`);
 line(`${C.cyan}●${C.ink} record_verdict`);
 line(
-  `  ${C.mute}⌞ ${C.green}high_risk @ 0.91  ·  log: verdicts/0xc65A…-17256.json`,
+  `  ${C.mute}⌞ ${C.green}high_risk @ 0.91  ·  log: verdicts/0x1111…-17256.json`,
 );
 line();
 line(
-  `${C.dim}●${C.ink} A 2019 account that sat still until last week, then six forks in`,
+  `${C.dim}●${C.ink} Dormant GitHub, a tight fork burst, a ticker in the README.`,
 );
-line(`  nineteen minutes and a ticker in the README. The curve looks ordinary.`);
-line(`  The GitHub does not.`);
+line(`  The curve looks ordinary. The GitHub does not.`);
 line();
 line(`  ${C.dim}Snapshot`);
 line(`  ${C.mute}─────────────────────────────────────────────`);
@@ -61,17 +60,17 @@ line(
   `  ${C.dim}lpLocked            ${C.ink}false   ${C.mute}phase=0, expected`,
 );
 line(`  ${C.dim}topHolderShare      ${C.ink}0.184`);
-line(`  ${C.dim}dormancyGapDays     ${C.ink}2481`);
-line(`  ${C.dim}forkBurst           ${C.ink}6 in 19 min`);
-line(`  ${C.dim}tickerMentions      ${C.ink}$BODKIN × 2`);
+line(`  ${C.dim}dormancyGapDays     ${C.ink}1226`);
+line(`  ${C.dim}forkBurst           ${C.ink}4 in 11 min`);
+line(`  ${C.dim}tickerMentions      ${C.ink}$ACME × 1`);
 line(`  ${C.mute}─────────────────────────────────────────────`);
 line();
 line(`  ${C.dim}Signals`);
 line(
-  `  ${C.mute}- ${C.ink}dormancyGapDays=2481 — created 2019, first visible repo 2026-09-03`,
+  `  ${C.mute}- ${C.ink}dormancyGapDays=1226 — created 2023, first visible repo 2026-08-19`,
 );
-line(`  ${C.mute}- ${C.ink}forkBurst.count=6 window=19m`);
-line(`  ${C.mute}- ${C.ink}tickerMentions=$BODKIN in README and bio`);
+line(`  ${C.mute}- ${C.ink}forkBurst.count=4 window=11m`);
+line(`  ${C.mute}- ${C.ink}tickerMentions=$ACME in README`);
 line(`  ${C.mute}- ${C.ink}lpLocked=false, phase=0 — not a red flag`);
 line(`  ${C.mute}- ${C.ink}mint/blacklist=false — Pons v2 template`);
 line();

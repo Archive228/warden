@@ -6,6 +6,7 @@ import {
   scanFourMemeLaunch,
   toLaunchpadScan as fourMemeToLaunchpadScan,
 } from "./fourmeme.ts";
+import { findNewLaunchesSince } from "../watch/watch.ts";
 
 // The actual claim feature_list.json makes for "multi-launchpad support":
 // two structurally different protocols (Pons locks LP in a vault and never
@@ -17,10 +18,13 @@ import {
 // test file to have separately gotten it right.
 Deno.test("Pons and four.meme normalize to an identical LaunchpadScan shape on real live launches", async () => {
   const ponsClient = createRobinhoodClient();
-  const ponsScan = await scanLaunch(
+  const latest = await ponsClient.getBlockNumber();
+  const { tokens } = await findNewLaunchesSince(
     ponsClient,
-    "0xc65AF5ed7d40A2A0C8E362B93b4AF70A40a58456",
+    latest - 6_000n,
   );
+  assertEquals(tokens.length > 0, true);
+  const ponsScan = await scanLaunch(ponsClient, tokens[0]);
   assertEquals(ponsScan.exists, true);
   if (!ponsScan.exists) return;
 
