@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>warden — vet-repo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="term.css" />
+</head>
+<body>
+  <div class="window">
+    <div class="chrome">
+      <div class="dot r"></div>
+      <div class="dot y"></div>
+      <div class="dot g"></div>
+      <span>warden — vet-repo</span>
+    </div>
+    <div class="term"><span class="prompt"><span class="cyan">❯</span> warden vet-repo Phosphenq/bodkin</span><span class="mute">{</span>
+  <span class="key">"owner"</span>: <span class="str">"Phosphenq"</span>,
+  <span class="key">"repo"</span>: <span class="str">"bodkin"</span>,
+  <span class="key">"accountCreatedAt"</span>: <span class="str">"2019-03-14T…"</span>,
+  <span class="key">"oldestVisibleRepoCreatedAt"</span>: <span class="str">"2026-09-03T…"</span>,
+  <span class="key">"dormancyGapDays"</span>: <span class="num">2481</span>,
+  <span class="key">"forkCount"</span>: <span class="num">6</span>,
+  <span class="key">"forkBurst"</span>: {
+    <span class="key">"windowMinutes"</span>: <span class="num">30</span>,
+    <span class="key">"count"</span>: <span class="num">6</span>,
+    <span class="key">"first"</span>: <span class="str">"2026-09-03T18:02:11Z"</span>,
+    <span class="key">"last"</span>: <span class="str">"2026-09-03T18:21:04Z"</span>
+  },
+  <span class="key">"starTimingAvailable"</span>: <span class="bool">false</span>,
+  <span class="key">"tickerMentions"</span>: [
+    { <span class="key">"location"</span>: <span class="str">"readme"</span>, <span class="key">"match"</span>: <span class="str">"$BODKIN"</span> },
+    { <span class="key">"location"</span>: <span class="str">"bio"</span>,    <span class="key">"match"</span>: <span class="str">"$BODKIN"</span> }
+  ],
+  <span class="key">"contractAddressMentions"</span>: []
+<span class="mute">}</span>
+
+<span class="red">● dormant 2019 account, six forks in 19 minutes, ticker in README + bio</span>
+<span class="mute">  starTimingAvailable=false is a GitHub restriction — not “no burst found.”</span>
+</div>
+  </div>
+</body>
+</html>

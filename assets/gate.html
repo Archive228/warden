@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>warden — decideTrade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="term.css" />
+</head>
+<body>
+  <div class="window">
+    <div class="chrome">
+      <div class="dot r"></div>
+      <div class="dot y"></div>
+      <div class="dot g"></div>
+      <span>src/execute/decide.ts</span>
+    </div>
+    <div class="code">
+      <div class="row"><div class="ln">19</div><div class="src"><span class="cmt">// The safety gate for real money. Every path returns a TradeDecision —</span></div></div>
+      <div class="row"><div class="ln">20</div><div class="src"><span class="cmt">// there is no path where a launch is silently skipped without a reason.</span></div></div>
+      <div class="row"><div class="ln">21</div><div class="src"><span class="cmt">// Verdict and pair-type are checked BEFORE --live is even consulted.</span></div></div>
+      <div class="row"><div class="ln">22</div><div class="src"></div></div>
+      <div class="row"><div class="ln">41</div><div class="src"><span class="kw">const</span> clears = verdict.category === <span class="str">"low_risk"</span> &amp;&amp;</div></div>
+      <div class="row"><div class="ln">42</div><div class="src">  verdict.confidence &gt;= opts.minConfidence;</div></div>
+      <div class="row"><div class="ln">43</div><div class="src"></div></div>
+      <div class="row"><div class="ln">44</div><div class="src"><span class="kw">if</span> (!clears) {</div></div>
+      <div class="row"><div class="ln">45</div><div class="src">  <span class="kw">return</span> { ...base, attempted: <span class="bool">false</span>,</div></div>
+      <div class="row"><div class="ln">46</div><div class="src">    reason: <span class="str">`verdict ${verdict.category} @ ${verdict.confidence} does not clear`</span> };</div></div>
+      <div class="row"><div class="ln">47</div><div class="src">}</div></div>
+      <div class="row"><div class="ln">48</div><div class="src"></div></div>
+      <div class="row"><div class="ln">53</div><div class="src"><span class="kw">if</span> (scan.pairToken.toLowerCase() !== ZERO_ADDRESS) {</div></div>
+      <div class="row"><div class="ln">54</div><div class="src">  <span class="kw">return</span> { ...base, attempted: <span class="bool">false</span>,</div></div>
+      <div class="row"><div class="ln">55</div><div class="src">    reason: <span class="str">"paired with ERC20, not native ETH"</span> };</div></div>
+      <div class="row"><div class="ln">56</div><div class="src">}</div></div>
+      <div class="row"><div class="ln">57</div><div class="src"></div></div>
+      <div class="row"><div class="ln">62</div><div class="src"><span class="kw">if</span> (!opts.live) {</div></div>
+      <div class="row"><div class="ln">63</div><div class="src">  <span class="kw">return</span> { ...base, attempted: <span class="bool">false</span>,</div></div>
+      <div class="row"><div class="ln">64</div><div class="src">    reason: <span class="str">"dry-run: would attempt buy, but --live was not passed"</span> };</div></div>
+      <div class="row"><div class="ln">65</div><div class="src">}</div></div>
+    </div>
+  </div>
+</body>
+</html>

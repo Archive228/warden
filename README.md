@@ -34,9 +34,13 @@
 
 <p align="center">
   <sub>
-    Open the same session in a browser:
-    <a href="assets/terminal.html"><code>assets/terminal.html</code></a>
-    · or run <code>deno task demo</code>
+    Styled sessions:
+    <a href="assets/terminal.html"><code>judge</code></a>
+    · <a href="assets/scan.html"><code>scan</code></a>
+    · <a href="assets/vet-repo.html"><code>vet-repo</code></a>
+    · <a href="assets/watch.html"><code>watch</code></a>
+    · <a href="assets/gate.html"><code>decide.ts</code></a>
+    · <code>deno task demo</code>
   </sub>
 </p>
 
@@ -83,9 +87,9 @@ That gap is the whole point of this project. Sniper bots already read LP locks, 
 
 If those four show up together, the README is advertising. The chain still has to be checked. Warden does both, and it will say when a check was impossible rather than quietly treating a missing signal as clean.
 
-<!-- visual: drop a screenshot of the bodkin fingerprint here -->
-
-<p align="center"><sub>slot — <code>assets/diagrams/why.png</code></sub></p>
+<p align="center">
+  <img src="assets/vet-repo.png" alt="warden vet-repo on Phosphenq/bodkin: dormant 2019 account, six forks in 19 minutes, $BODKIN in README and bio" width="760" />
+</p>
 
 ---
 
@@ -117,7 +121,9 @@ deno task start scan <token> --normalized
 
 `--normalized` prints the same field names on Pons and four.meme, so a later judge or alert path does not have to special-case the launchpad. Verified by an automated test that runs both adapters against real live launches and diffs the keys directly — including the cases where the *values* honestly differ (four.meme’s owner is supposed to be active pre-graduation; Pons’s never is).
 
-<!-- visual: scan JSON screenshot -->
+<p align="center">
+  <img src="assets/scan.png" alt="warden scan: JSON dump of curve progress, LP lock, holders, and the Pons token template" width="760" />
+</p>
 
 ### `vet-repo`
 
@@ -133,6 +139,10 @@ Ground truth was not synthetic. `Phosphenq/bodkin` is the known-bad profile from
 ```sh
 deno task start vet-repo <owner>/<repo>
 ```
+
+<p align="center">
+  <img src="assets/vet-repo.png" alt="warden vet-repo on Phosphenq/bodkin: dormant 2019 account, six forks in 19 minutes, $BODKIN in README and bio" width="760" />
+</p>
 
 ### `judge`
 
@@ -160,6 +170,10 @@ deno task start watch                     # poll forever
 deno task start watch --live --min-confidence 0.9 --buy-amount-eth 0.01
 ```
 
+<p align="center">
+  <img src="assets/watch.png" alt="warden watch dry-run: three launches judged, zero buys, missing data skipped instead of invented" width="760" />
+</p>
+
 Dry-run by default. `--live` is the only path that can submit a `buy()`, and only when:
 
 1. verdict is `low_risk`
@@ -167,6 +181,10 @@ Dry-run by default. `--live` is the only path that can submit a `buy()`, and onl
 3. the curve is native-ETH paired (not ERC20)
 
 Every decision — attempted or not — is appended to `verdicts/trades.jsonl`. There is no path where a launch is silently skipped without a reason on disk.
+
+<p align="center">
+  <img src="assets/gate.png" alt="src/execute/decide.ts: verdict, pair type, then --live — three gates before any buy" width="760" />
+</p>
 
 Polling is verified against live chain state. A live run is how two real bugs were found (empty `--once` falling into the infinite loop; public RPC 429s under sustained polling). A Telegram message has never actually been delivered from this environment. A real buy has never been broadcast, on purpose. See [Known gaps](#known-gaps).
 
@@ -186,32 +204,17 @@ deno task start backtest --since 2026-09-01
 
 One launch in, one verdict out. The on-chain read and the repo fingerprint are independent; either can be missing. The agent is not allowed to treat a missing half as a pass. Telegram fires on every judged launch. A buy is a separate gate after that, off unless you said `--live`.
 
-<!-- visual: replace the ascii with assets/diagrams/pipeline.png -->
-
+```mermaid
+flowchart TB
+  L[new launch] --> S[scan]
+  L --> V[vet-repo]
+  S --> J[judge]
+  V --> J
+  J --> T[Telegram]
+  J --> G{low_risk AND confidence AND native ETH}
+  G -->|no| Log["trades.jsonl — reason on disk"]
+  G -->|"--live only"| B["buy(), slippage-bounded"]
 ```
-new launch
-    |
-    v
-on-chain multicall  --------->  repo fingerprint (if linked)
-(LP lock, mint/blacklist,       (account age vs activity,
- ownership, holder conc.)        fork timing, $TICKER)
-    |                                |
-    +----------------+---------------+
-                     v
-            agent verdict + reasoning log
-                     |
-                     v
-              Telegram alert
-                     |
-                     v
-   low_risk && confidence >= threshold
-       && native-ETH-paired
-                     |
-                     v
-       (--live only) buy(), slippage-bounded
-```
-
-<p align="center"><sub>slot — <code>assets/diagrams/pipeline.png</code></sub></p>
 
 `judge` / `watch` / execution are Pons-only for now. four.meme is on the read side only — same normalized shape, no agent, no alerts, no buys. That is a scope cut, not a claim that four.meme is “done.”
 

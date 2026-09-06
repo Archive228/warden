@@ -1,0 +1,101 @@
+:root {
+  --bg: #0b0d10;
+  --term: #141414;
+  --ink: #e8e8e8;
+  --dim: #9a9a9a;
+  --mute: #6a6a6a;
+  --cyan: #3ad7dc;
+  --cyan-dim: #1f8f94;
+  --green: #5dca7a;
+  --red: #ff6b6b;
+  --prompt-bg: #2a2a2a;
+  --kw: #c792ea;
+  --str: #3ad7dc;
+  --num: #f6c177;
+  --cmt: #6a6a6a;
+  --ln: #4a4a4a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--bg); }
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+.window {
+  width: min(920px, 100%);
+  background: var(--term);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #2a2a2a;
+}
+.chrome {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  background: #1c1c1c;
+  border-bottom: 1px solid #2a2a2a;
+}
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.dot.r { background: #ff5f57; }
+.dot.y { background: #febc2e; }
+.dot.g { background: #28c840; }
+.chrome span {
+  flex: 1;
+  text-align: center;
+  color: #7a7a7a;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.term {
+  padding: 24px 32px 32px;
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.55;
+  white-space: pre;
+}
+.cyan { color: var(--cyan); }
+.green { color: var(--green); }
+.dim { color: var(--dim); }
+.mute { color: var(--mute); }
+.red { color: var(--red); }
+.amber { color: #e3b341; }
+.prompt {
+  display: block;
+  background: var(--prompt-bg);
+  padding: 3px 10px;
+  margin: 0 -10px 14px;
+  width: fit-content;
+}
+.key { color: var(--cyan-dim); }
+.str { color: var(--str); }
+.num { color: var(--num); }
+.bool { color: var(--cyan); }
+.feed { white-space: pre; }
+.ts { color: var(--mute); }
+.tok { color: var(--ink); }
+.code {
+  padding: 18px 0 28px;
+  font-size: 13.5px;
+  line-height: 1.62;
+}
+.row { display: flex; padding: 0 0 0 0; }
+.ln {
+  width: 56px;
+  flex: none;
+  text-align: right;
+  padding-right: 18px;
+  color: var(--ln);
+  user-select: none;
+}
+.src { white-space: pre; }
+.kw { color: var(--kw); }
+.cmt { color: var(--cmt); font-style: italic; }
+.gutter {
+  border-right: 1px solid #2a2a2a;
+}
