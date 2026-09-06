@@ -40,7 +40,6 @@
     · <a href="assets/vet-repo.html"><code>vet-repo</code></a>
     · <a href="assets/watch.html"><code>watch</code></a>
     · <a href="assets/gate.html"><code>decide.ts</code></a>
-    · <a href="https://github.com/Archive228/warden/blob/main/assets/demo.mp4">demo</a>
     · <code>deno task demo</code>
   </sub>
 </p>
@@ -48,13 +47,7 @@
 Most launch tools stare at the curve and call it due diligence. Warden reads the token *and* the story around it — then writes down what it actually saw, including what it could not check.
 
 <p align="center">
-  <a href="https://github.com/Archive228/warden/blob/main/assets/demo.mp4">
-    <img src="assets/demo-poster.png" alt="Watch the Warden demo (54s)" width="760" />
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/Archive228/warden/blob/main/assets/demo.mp4"><strong>▶ Watch demo · 54s</strong></a>
+  <img src="assets/cli.png" alt="Warden terminal — judge session" width="760" />
 </p>
 
 <br />
@@ -76,6 +69,10 @@ Most launch tools stare at the curve and call it due diligence. Warden reads the
 8. [Known gaps](#known-gaps)
 9. [Built on](#built-on)
 10. [License](#license)
+
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/b78fd085-43c2-4df4-b039-9290c4eaf018" width="760" controls muted playsinline></video>
+</p>
 
 ---
 
